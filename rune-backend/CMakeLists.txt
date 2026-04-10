@@ -101,3 +101,24 @@ target_include_directories(rune PRIVATE
 if(MSVC)
     target_compile_options(rune PRIVATE /W3 /utf-8)
 endif()
+
+# ── rune_brain executable (Cognitive Node) ────────────────────────────────────
+add_executable(rune_brain
+    src/brain_main.cpp
+    src/brain/brain_system.cpp
+)
+
+target_link_libraries(rune_brain PRIVATE
+    Threads::Threads
+    sqlite3
+    httplib::httplib
+    nlohmann_json::nlohmann_json
+)
+
+target_include_directories(rune_brain PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+if(MSVC)
+    target_compile_options(rune_brain PRIVATE /W3 /utf-8)
+endif()
