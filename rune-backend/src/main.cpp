@@ -1,159 +1,38 @@
 #include <atomic>
-#include <chrono>
-#include <cstdio>
 #include <iostream>
-#include <mutex>
-#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
 
-#include <sqlite3.h>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 
+#include "db/database.hpp"
+#include "encoding/rune_codec.hpp"
+#include "node/rune_node.hpp"
+#include "wallet/wallet.hpp"
+
 using json = nlohmann::json;
 
-// ── helpers ───────────────────────────────────────────────────────────────────
+// ── logging ───────────────────────────────────────────────────────────────────
 
-static std::mutex g_log_mutex;
+static std::mutex g_log_mtx;
 
 template <typename... Args>
-void log(const char* fmt, Args&&... args)
+static void log(const char* fmt, Args&&... args)
 {
-    std::lock_guard<std::mutex> lk(g_log_mutex);
+    std::lock_guard<std::mutex> lk(g_log_mtx);
     std::printf(fmt, std::forward<Args>(args)...);
     std::fflush(stdout);
 }
 
-// ── database ──────────────────────────────────────────────────────────────────
+// ── HTTP routes ───────────────────────────────────────────────────────────────
 
-static const char* SCHEMA_SQL = R"sql(
-CREATE TABLE IF NOT EXISTS runes (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT    NOT NULL UNIQUE,
-    glyph      TEXT,
-    meaning    TEXT,
-    created_at TEXT    DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS macro_runes (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT    NOT NULL UNIQUE,
-    sequence    TEXT,
-    description TEXT,
-    created_at  TEXT    DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS stories (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    title      TEXT    NOT NULL,
-    body       TEXT,
-    rune_id    INTEGER REFERENCES runes(id),
-    created_at TEXT    DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS mythic_moments (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    event      TEXT    NOT NULL,
-    rune_id    INTEGER REFERENCES runes(id),
-    story_id   INTEGER REFERENCES stories(id),
-    timestamp  TEXT    DEFAULT (datetime('now'))
-);
-)sql";
-
-struct Database {
-    sqlite3* db = nullptr;
-    std::mutex mtx;
-
-    explicit Database(const std::string& path)
-    {
-        if (sqlite3_open(path.c_str(), &db) != SQLITE_OK)
-            throw std::runtime_error(std::string("open db: ") + sqlite3_errmsg(db));
-        exec(SCHEMA_SQL);
-        log("[db] opened %s\n", path.c_str());
-    }
-
-    ~Database() { if (db) sqlite3_close(db); }
-
-    // Not copyable/movable because of the mutex and raw pointer.
-    Database(const Database&) = delete;
-    Database& operator=(const Database&) = delete;
-
-    void exec(const char* sql)
-    {
-        char* err = nullptr;
-        if (sqlite3_exec(db, sql, nullptr, nullptr, &err) != SQLITE_OK) {
-            std::string msg = err ? err : "unknown";
-            sqlite3_free(err);
-            throw std::runtime_error("SQL: " + msg);
-        }
-    }
-
-    int count(const char* table)
-    {
-        std::lock_guard<std::mutex> lk(mtx);
-        std::string sql = std::string("SELECT COUNT(*) FROM ") + table + ";";
-        sqlite3_stmt* stmt = nullptr;
-        sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
-        int n = 0;
-        if (sqlite3_step(stmt) == SQLITE_ROW) n = sqlite3_column_int(stmt, 0);
-        sqlite3_finalize(stmt);
-        return n;
-    }
-
-    // Returns all rows from `runes` as a JSON array.
-    json all_runes()
-    {
-        std::lock_guard<std::mutex> lk(mtx);
-        const char* sql =
-            "SELECT id, name, glyph, meaning, created_at FROM runes ORDER BY id;";
-        sqlite3_stmt* stmt = nullptr;
-        sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
-        json arr = json::array();
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            auto text = [&](int col) -> std::string {
-                const unsigned char* p = sqlite3_column_text(stmt, col);
-                return p ? reinterpret_cast<const char*>(p) : "";
-            };
-            arr.push_back({
-                {"id",         sqlite3_column_int(stmt, 0)},
-                {"name",       text(1)},
-                {"glyph",      text(2)},
-                {"meaning",    text(3)},
-                {"created_at", text(4)}
-            });
-        }
-        sqlite3_finalize(stmt);
-        return arr;
-    }
-};
-
-// ── worker nodes ──────────────────────────────────────────────────────────────
-
-struct RuneNode {
-    int id;
-    std::atomic<bool>& shutdown;
-    Database& db;
-
-    void run()
-    {
-        log("[node %d] started\n", id);
-        while (!shutdown.load()) {
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            if (shutdown.load()) break;
-            log("[node %d] heartbeat — runes: %d\n", id, db.count("runes"));
-        }
-        log("[node %d] stopped\n", id);
-    }
-};
-
-// ── HTTP server ───────────────────────────────────────────────────────────────
-
-static void setup_routes(httplib::Server& srv, Database& db,
+static void setup_routes(httplib::Server& srv,
+                         Database&        db,
+                         wallet::Keypair& kp,
                          std::atomic<bool>& shutdown)
 {
-    // CORS helper
     auto cors = [](httplib::Response& res) {
         res.set_header("Access-Control-Allow-Origin", "*");
     };
@@ -161,10 +40,12 @@ static void setup_routes(httplib::Server& srv, Database& db,
     // GET /health
     srv.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
         json body = {
-            {"status", "ok"},
-            {"runes",  db.count("runes")},
-            {"stories", db.count("stories")},
-            {"mythic_moments", db.count("mythic_moments")}
+            {"status",         "ok"},
+            {"runes",          db.count("runes")},
+            {"macro_runes",    db.count("macro_runes")},
+            {"stories",        db.count("stories")},
+            {"mythic_moments", db.count("mythic_moments")},
+            {"public_key",     wallet::to_hex(kp.public_key).substr(0, 16) + "..."}
         };
         cors(res);
         res.set_content(body.dump(2), "application/json");
@@ -176,10 +57,65 @@ static void setup_routes(httplib::Server& srv, Database& db,
         res.set_content(db.all_runes().dump(2), "application/json");
     });
 
-    // POST /shutdown  (for clean remote stop)
+    // GET /runes/encode?text=hello
+    srv.Get("/runes/encode", [](const httplib::Request& req, httplib::Response& res) {
+        std::string text = req.has_param("text") ? req.get_param_value("text") : "";
+        json body = {
+            {"input",   text},
+            {"encoded", rune_codec::encode(text)}
+        };
+        res.set_header("Access-Control-Allow-Origin", "*");
+        res.set_content(body.dump(2), "application/json");
+    });
+
+    // GET /wallet/pubkey
+    srv.Get("/wallet/pubkey", [&](const httplib::Request&, httplib::Response& res) {
+        json body = {{"public_key", wallet::to_hex(kp.public_key)}};
+        cors(res);
+        res.set_content(body.dump(2), "application/json");
+    });
+
+    // POST /wallet/sign   body: {"message":"..."}
+    srv.Post("/wallet/sign", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            std::string msg = body.at("message").get<std::string>();
+            std::vector<uint8_t> bytes(msg.begin(), msg.end());
+            auto sig = wallet::sign(kp, bytes);
+            res.set_content(
+                json({{"signature", wallet::to_hex(sig)}}).dump(2),
+                "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+
+    // POST /wallet/verify  body: {"message":"...","signature":"<hex>"}
+    srv.Post("/wallet/verify", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            std::string msg    = body.at("message"  ).get<std::string>();
+            std::string sighex = body.at("signature").get<std::string>();
+            std::vector<uint8_t> msgbytes(msg.begin(), msg.end());
+            auto sigbytes = wallet::from_hex(sighex);
+            if (sigbytes.size() != 64) throw std::runtime_error("signature must be 64 bytes");
+            std::array<uint8_t, 64> sig64{};
+            std::copy(sigbytes.begin(), sigbytes.end(), sig64.begin());
+            bool ok = wallet::verify(kp.public_key, msgbytes, sig64);
+            res.set_content(json({{"valid", ok}}).dump(2), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+
+    // POST /shutdown
     srv.Post("/shutdown", [&](const httplib::Request&, httplib::Response& res) {
         cors(res);
-        res.set_content("{\"status\":\"shutting down\"}", "application/json");
+        res.set_content(json({{"status", "shutting_down"}}).dump(), "application/json");
         shutdown.store(true);
         srv.stop();
     });
@@ -189,24 +125,50 @@ static void setup_routes(httplib::Server& srv, Database& db,
 
 int main(int argc, char* argv[])
 {
-    const std::string db_path  = (argc > 1) ? argv[1] : "rune.db";
-    const int         http_port = (argc > 2) ? std::stoi(argv[2]) : 7070;
+    const std::string db_path   = (argc > 1) ? argv[1] : "rune.db";
+    const std::string kp_path   = (argc > 2) ? argv[2] : "wallet.json";
+    const int         http_port = (argc > 3) ? std::stoi(argv[3]) : 7070;
 
-    log("[rune] starting — db: %s  http: :%d\n", db_path.c_str(), http_port);
+    log("[rune] db=%s  wallet=%s  port=%d\n",
+        db_path.c_str(), kp_path.c_str(), http_port);
 
+    // ── Database ──────────────────────────────────────────────────────────────
     Database db(db_path);
+    log("[db] migrations applied\n");
 
+    // Seed initial runes on first run.
     if (db.count("runes") == 0) {
         db.exec(R"sql(
             INSERT INTO runes (name, glyph, meaning) VALUES
                 ('Fehu',     'ᚠ', 'Cattle, wealth, abundance'),
                 ('Uruz',     'ᚢ', 'Aurochs, strength, endurance'),
-                ('Thurisaz', 'ᚦ', 'Giant, thorn, chaos');
+                ('Thurisaz', 'ᚦ', 'Giant, thorn, chaos'),
+                ('Ansuz',    'ᚨ', 'God, mouth, wisdom'),
+                ('Raidho',   'ᚱ', 'Ride, journey, rhythm'),
+                ('Kenaz',    'ᚲ', 'Torch, knowledge, enlightenment'),
+                ('Gebo',     'ᚷ', 'Gift, exchange, partnership'),
+                ('Wunjo',    'ᚹ', 'Joy, fellowship, harmony');
         )sql");
-        log("[db] seeded initial runes\n");
+        log("[db] seeded 8 Elder Futhark runes\n");
     }
 
-    // Worker nodes
+    // ── Wallet ────────────────────────────────────────────────────────────────
+    wallet::Keypair kp;
+    try {
+        kp = wallet::load(kp_path);
+        log("[wallet] loaded  pubkey=%s...\n",
+            wallet::to_hex(kp.public_key).substr(0, 16).c_str());
+    } catch (...) {
+        kp = wallet::generate();
+        wallet::save(kp, kp_path);
+        log("[wallet] created pubkey=%s...\n",
+            wallet::to_hex(kp.public_key).substr(0, 16).c_str());
+    }
+
+    // ── Rune codec demo ───────────────────────────────────────────────────────
+    log("[codec] encode('rune') = %s\n", rune_codec::encode("rune").c_str());
+
+    // ── Node threads ──────────────────────────────────────────────────────────
     const int NODE_COUNT = 2;
     std::atomic<bool> shutdown{false};
     std::vector<std::thread> threads;
@@ -217,9 +179,9 @@ int main(int argc, char* argv[])
         threads.emplace_back([n = std::move(node)]() mutable { n.run(); });
     }
 
-    // HTTP server on its own thread
+    // ── HTTP server ───────────────────────────────────────────────────────────
     httplib::Server srv;
-    setup_routes(srv, db, shutdown);
+    setup_routes(srv, db, kp, shutdown);
 
     threads.emplace_back([&srv, http_port]() {
         log("[http] listening on :%d\n", http_port);
@@ -227,12 +189,18 @@ int main(int argc, char* argv[])
         log("[http] server stopped\n");
     });
 
-    log("[rune] %d node(s) + HTTP server running.\n"
-        "       GET  http://localhost:%d/health\n"
-        "       GET  http://localhost:%d/runes\n"
-        "       POST http://localhost:%d/shutdown\n"
-        "       Press ENTER to stop.\n",
-        NODE_COUNT, http_port, http_port, http_port);
+    log("[rune] %d node(s) running.\n"
+        "  GET  http://localhost:%d/health\n"
+        "  GET  http://localhost:%d/runes\n"
+        "  GET  http://localhost:%d/runes/encode?text=hello\n"
+        "  GET  http://localhost:%d/wallet/pubkey\n"
+        "  POST http://localhost:%d/wallet/sign\n"
+        "  POST http://localhost:%d/wallet/verify\n"
+        "  POST http://localhost:%d/shutdown\n"
+        "Press ENTER to stop.\n",
+        NODE_COUNT,
+        http_port, http_port, http_port, http_port,
+        http_port, http_port, http_port);
 
     std::cin.get();
 
@@ -243,4 +211,5 @@ int main(int argc, char* argv[])
     log("[rune] shutdown complete.\n");
     return 0;
 }
+
 
