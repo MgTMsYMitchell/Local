@@ -1,0 +1,39 @@
+{
+  "type": "MeshMessage",
+  "version": 1,
+  "examples": {
+    "HELLO": {
+      "msgType": "HELLO",
+      "capabilities": ["patterns", "skills", "adjacency"],
+      "protocolVersion": 1
+    },
+    "PATTERN_SUMMARY": {
+      "msgType": "PATTERN_SUMMARY",
+      "patterns": [
+        {
+          "signature_hash": "ab12cd",
+          "skill_idx": 21,
+          "dewey_code": "⟐C3-21-004",
+          "count_local": 123
+        }
+      ]
+    },
+    "SKILL_SUMMARY": {
+      "msgType": "SKILL_SUMMARY",
+      "skills": [
+        {
+          "skill_idx": 21,
+          "name": "mesh.sync",
+          "tags": ["mesh", "sync"],
+          "version": 1
+        }
+      ]
+    },
+    "ADJACENCY_SUMMARY": {
+      "msgType": "ADJACENCY_SUMMARY",
+      "edges": [
+        { "skill_a": 21, "skill_b": 23, "weight": 0.78 }
+      ]
+    }
+  }
+}

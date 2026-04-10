@@ -1,0 +1,5 @@
+# RN2 system configuration
+
+root: "./rn2"
+db_path: "./backend/data/rn2.db"
+models_path: "./backend/models"
