@@ -1,0 +1,7 @@
+# ninja log v7
+0	819	1775854773122346943	CMakeFiles/qr2_rune_engine.dir/engine/qr2_rune_engine.cpp.o	6fbc18215df2b150
+1	956	1775854773123883048	CMakeFiles/deepthink_bench.dir/engine/benchmark.cpp.o	83c837aa515cc6e3
+820	1342	1775854773942341398	libqr2_rune_engine.a	1ecff32ee81806c9
+1342	1387	1775854774464337869	deepthink_bench	460bbc90a80c801
+1	12754	1775854819837030003	CMakeFiles/deepthink_service.dir/service/deepthink_service.cpp.o	f38104bfc3b13139
+12754	12814	1775854832589944811	deepthink_service	1acef74d84f9692
