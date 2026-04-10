@@ -81,8 +81,8 @@ async function llmReply(userMessage) {
         res.on('end', () => {
           try {
             const j = JSON.parse(data);
-            resolve(j?.choices?.[0]?.message?.content ?? data);
-          } catch { resolve(data); }
+            resolve(j?.choices?.[0]?.message?.content ?? `[llm] unexpected response shape: ${data.slice(0, 100)}`);
+          } catch { resolve(`[llm error] malformed JSON: ${data.slice(0, 100)}`); }
         });
       }
     );

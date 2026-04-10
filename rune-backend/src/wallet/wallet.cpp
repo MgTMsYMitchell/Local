@@ -24,7 +24,8 @@ static std::array<uint8_t, 32> random_seed()
 {
     std::array<uint8_t, 32> seed{};
     std::random_device rd;
-    // Fill 8 bytes per random_device call (uint32_t, 4 bytes each → 8 calls).
+    // Each rd() call yields one uint32_t (4 bytes).
+    // 8 calls are needed to fill the 32-byte seed.
     for (size_t i = 0; i < seed.size(); i += sizeof(uint32_t)) {
         uint32_t val = rd();
         for (size_t j = 0; j < sizeof(uint32_t) && (i + j) < seed.size(); ++j)

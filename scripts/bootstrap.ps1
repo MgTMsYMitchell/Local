@@ -21,7 +21,12 @@ foreach ($t in $tools) {
     Write-Host "Installing $($t.name)..." -ForegroundColor Yellow
     winget install --id $t.id -e --accept-source-agreements --accept-package-agreements
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "  NOTE: $($t.name) may already be installed or requires manual install." -ForegroundColor DarkYellow
+        $alreadyInstalled = Get-Command $t.name -ErrorAction SilentlyContinue
+        if ($alreadyInstalled) {
+            Write-Host "  SKIPPED: $($t.name) is already available on PATH." -ForegroundColor DarkYellow
+        } else {
+            Write-Host "  WARNING: $($t.name) install may have failed. Check above output." -ForegroundColor Red
+        }
     }
 }
 

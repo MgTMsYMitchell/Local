@@ -69,10 +69,13 @@ inline std::optional<RuneEntry> by_glyph(std::string_view glyph)
 // Two-character phonemes (th, ei, ng) are matched greedily before singles.
 inline std::string encode(std::string_view text)
 {
-    // Build a lower-case copy for matching.
+        // Build a lower-case copy for matching.
     std::string lower(text);
-    for (auto& c : lower)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (auto& c : lower) {
+        c = static_cast<char>(
+            static_cast<unsigned char>(
+                std::tolower(static_cast<unsigned char>(c))));
+    }
 
     std::string out;
     out.reserve(lower.size() * 3);

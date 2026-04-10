@@ -24,7 +24,10 @@ function backendGet(endpoint) {
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
           try { resolve(JSON.parse(data)); }
-          catch { resolve({ raw: data }); }
+          catch (err) {
+            console.error(`[rune-web] JSON parse error on ${endpoint}:`, err.message, '— raw:', data.slice(0, 120));
+            resolve({ raw: data });
+          }
         });
       }
     );
