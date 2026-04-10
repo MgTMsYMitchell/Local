@@ -1,6 +1,6 @@
 -- Migration 003 — performance indexes
 -- Added to eliminate full-table scans on FK join columns and
--- to support efficient agent-log filtering by agent name and timestamp.
+-- to support efficient agent-log filtering by agent name and created_at.
 
 -- stories → runes lookup (e.g. "find all stories for rune X")
 CREATE INDEX IF NOT EXISTS idx_stories_rune_id
