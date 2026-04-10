@@ -1,18 +1,25 @@
-# Rune Backend — C++20 + SQLite + pthreads
+# Rune Backend — C++20 · SQLite · cpp-httplib · nlohmann/json · pthreads
 
-A threaded C++ backend node for the Rune System.
+A threaded C++ backend node for the Rune System.  
+All C++ dependencies are fetched automatically at CMake configure time via
+`FetchContent` — **no manual installs needed beyond the build toolchain**.
 
-## Dependencies (Windows)
+## Cloned dependency sources
+
+| Library | Source | Version |
+|---------|--------|---------|
+| [sqlite/sqlite](https://github.com/sqlite/sqlite) | amalgamation (C) | 3.45.2 |
+| [yhirose/cpp-httplib](https://github.com/yhirose/cpp-httplib) | header-only C++ | v0.15.3 |
+| [nlohmann/json](https://github.com/nlohmann/json) | header-only C++ | v3.11.3 |
+
+## Windows toolchain (one-time)
 
 ```powershell
-winget install --id Kitware.CMake     -e
-winget install --id Ninja-build.Ninja -e
-winget install --id LLVM.LLVM         -e   # clang-cl, or use MSVC
+winget install --id Kitware.CMake        -e   # >= 3.20
+winget install --id Ninja-build.Ninja    -e
+winget install --id Microsoft.VisualStudio.2022.BuildTools -e
+# or: winget install --id LLVM.LLVM -e  (for clang-cl)
 ```
-
-SQLite3 is either found via `find_package(SQLite3)` or compiled from
-a vendored single-file amalgamation placed at `vendor/sqlite3.c` +
-`vendor/sqlite3.h` (download from https://sqlite.org/amalgamation.html).
 
 ## Build
 
@@ -22,16 +29,23 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
+CMake will clone SQLite, cpp-httplib, and nlohmann/json into `build/_deps/`
+the first time it runs (requires internet access on the build machine).
+
 ## Run
 
 ```powershell
-.\build\rune.exe rune.db
+.\build\rune.exe              # uses rune.db on port 7070 (defaults)
+.\build\rune.exe mydata.db 8080   # custom db path + port
 ```
 
-Press **ENTER** to gracefully stop the node threads.
+Press **ENTER** to gracefully shut down the node threads and HTTP server.
 
-## What it does
+## Endpoints (served by the C++ process itself)
 
-- Opens (or creates) `rune.db` with the full schema.
-- Seeds three default runes on first run.
-- Starts 2 background worker threads that log a heartbeat every 5 s.
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | JSON: status + row counts |
+| GET | `/runes`  | JSON array of all runes |
+| POST | `/shutdown` | Graceful stop via HTTP |
+
