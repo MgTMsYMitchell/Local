@@ -1,0 +1,21 @@
+{
+  "cmake.sourceDirectory": "${workspaceFolder}/rune-backend",
+  "cmake.buildDirectory": "${workspaceFolder}/rune-backend/build",
+  "cmake.generator": "Ninja",
+  "cmake.buildType": "Debug",
+  "cmake.installPrefix": "${workspaceFolder}/rune-backend/install",
+  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+  "C_Cpp.default.cppStandard": "c++20",
+  "files.associations": {
+    "*.hpp": "cpp",
+    "*.cpp": "cpp",
+    "*.h": "c"
+  },
+  "editor.formatOnSave": true,
+  "[cpp]": {
+    "editor.defaultFormatter": "ms-vscode.cpptools"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}
