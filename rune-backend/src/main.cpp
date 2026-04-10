@@ -37,24 +37,29 @@ static void setup_routes(httplib::Server& srv,
         res.set_header("Access-Control-Allow-Origin", "*");
     };
 
-    // GET /health
+    // GET /health — all counts in a single SQL round-trip
     srv.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
+        auto hc = db.health_counts();
         json body = {
             {"status",         "ok"},
-            {"runes",          db.count("runes")},
-            {"macro_runes",    db.count("macro_runes")},
-            {"stories",        db.count("stories")},
-            {"mythic_moments", db.count("mythic_moments")},
+            {"runes",          hc.runes},
+            {"macro_runes",    hc.macro_runes},
+            {"stories",        hc.stories},
+            {"mythic_moments", hc.mythic_moments},
             {"public_key",     wallet::to_hex(kp.public_key).substr(0, 16) + "..."}
         };
         cors(res);
         res.set_content(body.dump(2), "application/json");
     });
 
-    // GET /runes
-    srv.Get("/runes", [&](const httplib::Request&, httplib::Response& res) {
+    // GET /runes[?limit=N&offset=N]
+    srv.Get("/runes", [&](const httplib::Request& req, httplib::Response& res) {
+        int limit  = 500;
+        int offset = 0;
+        if (req.has_param("limit"))  limit  = std::stoi(req.get_param_value("limit"));
+        if (req.has_param("offset")) offset = std::stoi(req.get_param_value("offset"));
         cors(res);
-        res.set_content(db.all_runes().dump(2), "application/json");
+        res.set_content(db.all_runes(limit, offset).dump(2), "application/json");
     });
 
     // GET /runes/encode?text=hello
@@ -136,9 +141,10 @@ int main(int argc, char* argv[])
     Database db(db_path);
     log("[db] migrations applied\n");
 
-    // Seed initial runes on first run.
+    // Seed initial runes on first run (exec_locked is safe after threads start,
+    // though threads haven't started yet — being explicit is good practice).
     if (db.count("runes") == 0) {
-        db.exec(R"sql(
+        db.exec_locked(R"sql(
             INSERT INTO runes (name, glyph, meaning) VALUES
                 ('Fehu',     'ᚠ', 'Cattle, wealth, abundance'),
                 ('Uruz',     'ᚢ', 'Aurochs, strength, endurance'),

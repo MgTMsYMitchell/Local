@@ -33,9 +33,12 @@ public:
             for (int i = 0; i < 50 && !shutdown_.load(std::memory_order_relaxed); ++i)
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             if (shutdown_.load(std::memory_order_relaxed)) break;
+
+            // Single SQL round-trip for all counts instead of three separate
+            // COUNT(*) queries (each of which would acquire the mutex in turn).
+            auto hc = db_.health_counts();
             log("[node %d] heartbeat — runes=%d  stories=%d  mythic=%d\n",
-                id_, db_.count("runes"), db_.count("stories"),
-                db_.count("mythic_moments"));
+                id_, hc.runes, hc.stories, hc.mythic_moments);
         }
         log("[node %d] stopped\n", id_);
     }

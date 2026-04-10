@@ -3,8 +3,17 @@
 #include <stdexcept>
 #include <string>
 
-// Schema applied on first open (idempotent via IF NOT EXISTS).
-static const char* SCHEMA_SQL = R"sql(
+// ── migration descriptors ─────────────────────────────────────────────────────
+struct Migration {
+    int         version;
+    const char* name;
+    const char* sql;
+};
+
+static const Migration MIGRATIONS[] = {
+    {
+        1, "initial_schema",
+        R"sql(
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    INTEGER PRIMARY KEY,
     name       TEXT    NOT NULL,
@@ -49,19 +58,7 @@ CREATE TABLE IF NOT EXISTS wallet (
     secret_key TEXT    NOT NULL,
     created_at TEXT    DEFAULT (datetime('now'))
 );
-)sql";
-
-// ── migration descriptors ─────────────────────────────────────────────────────
-struct Migration {
-    int         version;
-    const char* name;
-    const char* sql;
-};
-
-static const Migration MIGRATIONS[] = {
-    {
-        1, "initial_schema",
-        SCHEMA_SQL
+        )sql"
     },
     {
         2, "add_agent_log",
@@ -75,6 +72,18 @@ CREATE TABLE IF NOT EXISTS agent_log (
 );
         )sql"
     },
+    {
+        3, "perf_indexes",
+        R"sql(
+-- Indexes on FK columns eliminate full-table scans on JOIN / WHERE lookups.
+CREATE INDEX IF NOT EXISTS idx_stories_rune_id  ON stories(rune_id);
+CREATE INDEX IF NOT EXISTS idx_mythic_rune_id   ON mythic_moments(rune_id);
+CREATE INDEX IF NOT EXISTS idx_mythic_story_id  ON mythic_moments(story_id);
+-- agent_log: fast filtering by agent name and time-range queries.
+CREATE INDEX IF NOT EXISTS idx_agentlog_agent   ON agent_log(agent);
+CREATE INDEX IF NOT EXISTS idx_agentlog_ts      ON agent_log(created_at);
+        )sql"
+    },
 };
 
 // ── Database implementation ───────────────────────────────────────────────────
@@ -84,8 +93,18 @@ Database::Database(const std::string& path)
     if (sqlite3_open(path.c_str(), &db) != SQLITE_OK)
         throw std::runtime_error(std::string("sqlite open: ") + sqlite3_errmsg(db));
 
-    // Enable WAL for better concurrent read performance.
+    // WAL mode: allows concurrent readers while a writer is active.
     exec("PRAGMA journal_mode=WAL;");
+
+    // With WAL, NORMAL is safe and avoids the extra fsync of FULL.
+    exec("PRAGMA synchronous=NORMAL;");
+
+    // 40 MB page cache (negative value = kibibytes).
+    exec("PRAGMA cache_size=-40000;");
+
+    // Keep temp tables / indexes in RAM rather than a temp file.
+    exec("PRAGMA temp_store=MEMORY;");
+
     exec("PRAGMA foreign_keys=ON;");
 
     run_migrations();
@@ -106,9 +125,45 @@ void Database::exec(const char* sql)
     }
 }
 
+void Database::exec_locked(const char* sql)
+{
+    std::lock_guard<std::mutex> lk(mtx);
+    exec(sql);
+}
+
+// Returns all four row-counts in a single SQLite round-trip.
+// Using scalar subqueries is cheaper than four separate statements because
+// SQLite processes them in one B-tree pass over the internal stat pages.
+HealthCounts Database::health_counts()
+{
+    std::lock_guard<std::mutex> lk(mtx);
+
+    static const char* sql =
+        "SELECT"
+        "  (SELECT COUNT(*) FROM runes)          AS rune_count,"
+        "  (SELECT COUNT(*) FROM macro_runes)    AS macro_count,"
+        "  (SELECT COUNT(*) FROM stories)        AS story_count,"
+        "  (SELECT COUNT(*) FROM mythic_moments) AS mythic_count;";
+
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+
+    HealthCounts hc{};
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        hc.runes          = sqlite3_column_int(stmt, 0);
+        hc.macro_runes    = sqlite3_column_int(stmt, 1);
+        hc.stories        = sqlite3_column_int(stmt, 2);
+        hc.mythic_moments = sqlite3_column_int(stmt, 3);
+    }
+    sqlite3_finalize(stmt);
+    return hc;
+}
+
 int Database::count(const char* table)
 {
     std::lock_guard<std::mutex> lk(mtx);
+    // NOTE: table is always a string literal from internal callers, never
+    // user-supplied, so string concatenation here is safe.
     std::string sql = std::string("SELECT COUNT(*) FROM ") + table + ";";
     sqlite3_stmt* stmt = nullptr;
     sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
@@ -118,13 +173,23 @@ int Database::count(const char* table)
     return n;
 }
 
-nlohmann::json Database::all_runes()
+nlohmann::json Database::all_runes(int limit, int offset)
 {
     std::lock_guard<std::mutex> lk(mtx);
-    const char* sql =
-        "SELECT id, name, glyph, meaning, created_at FROM runes ORDER BY id;";
+
+    // LIMIT/OFFSET with bound parameters prevents unbounded scans and
+    // protects against (theoretical) injection via numeric args.
+    static const char* sql =
+        "SELECT id, name, glyph, meaning, created_at "
+        "FROM runes ORDER BY id "
+        "LIMIT ? OFFSET ?;";
+
     sqlite3_stmt* stmt = nullptr;
     sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+
+    // limit <= 0 means "return everything" — use SQLite's max signed int.
+    sqlite3_bind_int(stmt, 1, (limit > 0) ? limit : 0x7fffffff);
+    sqlite3_bind_int(stmt, 2, offset);
 
     auto text = [&](int col) -> std::string {
         const unsigned char* p = sqlite3_column_text(stmt, col);
@@ -147,7 +212,7 @@ nlohmann::json Database::all_runes()
 
 void Database::run_migrations()
 {
-    // Ensure migration tracking table exists before anything else.
+    // Ensure the tracking table exists before we query it.
     exec(R"sql(
         CREATE TABLE IF NOT EXISTS schema_migrations (
             version    INTEGER PRIMARY KEY,
@@ -156,25 +221,39 @@ void Database::run_migrations()
         );
     )sql");
 
+    // Prepare reusable statements once and bind per-migration.
+    // Using sqlite3_bind_int avoids string concatenation and is more efficient
+    // when the migration count grows.
+    sqlite3_stmt* check_stmt = nullptr;
+    sqlite3_prepare_v2(db,
+        "SELECT COUNT(*) FROM schema_migrations WHERE version = ?;",
+        -1, &check_stmt, nullptr);
+
+    sqlite3_stmt* ins_stmt = nullptr;
+    sqlite3_prepare_v2(db,
+        "INSERT INTO schema_migrations (version, name) VALUES (?, ?);",
+        -1, &ins_stmt, nullptr);
+
     for (const auto& m : MIGRATIONS) {
-        // Check if this version is already applied.
-        std::string check =
-            "SELECT COUNT(*) FROM schema_migrations WHERE version = " +
-            std::to_string(m.version) + ";";
-        sqlite3_stmt* stmt = nullptr;
-        sqlite3_prepare_v2(db, check.c_str(), -1, &stmt, nullptr);
+        // Check whether this version is already applied.
+        sqlite3_reset(check_stmt);
+        sqlite3_bind_int(check_stmt, 1, m.version);
         int already = 0;
-        if (sqlite3_step(stmt) == SQLITE_ROW)
-            already = sqlite3_column_int(stmt, 0);
-        sqlite3_finalize(stmt);
+        if (sqlite3_step(check_stmt) == SQLITE_ROW)
+            already = sqlite3_column_int(check_stmt, 0);
 
         if (already) continue;
 
         exec(m.sql);
 
-        std::string record =
-            std::string("INSERT INTO schema_migrations (version, name) VALUES (") +
-            std::to_string(m.version) + ", '" + m.name + "');";
-        exec(record.c_str());
+        // Record the applied migration.
+        sqlite3_reset(ins_stmt);
+        sqlite3_bind_int (ins_stmt, 1, m.version);
+        sqlite3_bind_text(ins_stmt, 2, m.name, -1, SQLITE_STATIC);
+        sqlite3_step(ins_stmt);
     }
+
+    sqlite3_finalize(check_stmt);
+    sqlite3_finalize(ins_stmt);
 }
+
