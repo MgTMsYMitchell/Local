@@ -1,0 +1,13 @@
+{
+  "name": "rune-agents",
+  "version": "1.0.0",
+  "description": "Rune System — chat, node-monitor, and wallet agents",
+  "scripts": {
+    "chat":   "node chat-agent.js",
+    "node":   "node node-agent.js",
+    "wallet": "node wallet-agent.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
