@@ -1339,6 +1339,1158 @@ data, but data that learns from being used.
 
 ---
 
+## Mechanism 12 — Fluid Analogies / Slipnet
+
+### Source
+
+Hofstadter's "Fluid Analogies" research (Copycat, Metacat projects)
+uses a **Slipnet** — a network of concepts where nodes are connected by
+**slip-links** of varying strength. When the system reasons by analogy,
+concepts "slip" along these links from one meaning to a related meaning.
+"Successor" slips to "predecessor." "Leftmost" slips to "rightmost."
+The strength of slip determines how easy the analogy is.
+
+### Gap in Current Spec
+
+Tendrils connect related symbols, but there is no concept of a symbol
+"slipping" to a related-but-different meaning. Analogy detection relies
+on explicit radical overlap. Subtle analogies — where the relationship
+is structural, not compositional — are missed entirely.
+
+### Integration
+
+Add **slip-links** to the tendril system — a special tendril type that
+connects concepts by **analogical relationship** rather than semantic
+similarity. Slip-links enable fluid reasoning across domains.
+
+```
+SLIP-LINK PROPERTIES
+════════════════════
+
+  A slip-link connects two symbols that are NOT semantically similar
+  but ARE structurally analogous.
+
+  Example:
+    "Cache invalidation" ←→ "Forest fire renewal"
+    These share NO radicals. But structurally:
+      - Both involve destruction that enables renewal
+      - Both are periodic
+      - Both clear accumulated cruft
+
+  The slip-link encodes:
+    slip_from:     symbol_A (cache invalidation)
+    slip_to:       symbol_B (forest fire renewal)
+    slip_strength: 0.7 (strong analogy)
+    slip_mapping: {
+      "CR-32(Remember)" : "CR-01(Tree)",
+      "CR-54(Error)"    : "CR-09(Fire)",
+      "CR-25(Wilt)"     : "CR-24(Bloom)",
+      "TRN-DECAY"       : "TRN-CYCLE"
+    }
+    slip_type: "structural_analogy"
+```
+
+**Updated Tendril Type Enum:**
+
+```json
+{
+  "tendril_type": {
+    "type": "string",
+    "enum": [
+      "association",
+      "causal",
+      "compositional",
+      "antithetical",
+      "dream_bridge",
+      "slip_link"
+    ]
+  }
+}
+```
+
+**Slip-Link Schema Addition (in Tendril):**
+
+```json
+{
+  "slip_mapping": {
+    "type": ["object", "null"],
+    "description": "Maps radicals in source to analogous radicals in target. Keys and values are radical IDs or movement glyph IDs.",
+    "additionalProperties": { "type": "string" }
+  },
+  "slip_strength": {
+    "type": ["number", "null"],
+    "minimum": 0.0,
+    "maximum": 1.0,
+    "description": "How easily the analogy can be followed. 1.0=obvious, 0.1=tenuous"
+  }
+}
+```
+
+**Schema Addition:**
+
+```sql
+ALTER TABLE tendrils ADD COLUMN slip_mapping TEXT; -- JSON object
+ALTER TABLE tendrils ADD COLUMN slip_strength REAL;
+```
+
+**Slip-Link Discovery (during REM consolidation):**
+
+```
+REM CREATIVE STAGE — ANALOGY DETECTION (enhanced)
+══════════════════════════════════════════════════
+
+For each pair of unrelated symbols/dreams/theories:
+  1. Extract structural pattern:
+     - Grid positions filled (which of A/B/C/D)
+     - Movement glyph types used
+     - Transformation types used
+     - Temporal phase alignment
+     - AC-ratio similarity
+  2. Compare structural patterns (IGNORING specific radicals)
+  3. If structural similarity > 0.6:
+     → Create slip-link between the two
+     → Map corresponding radicals by position
+     → Slip strength = structural similarity score
+  4. Log as "analogical discovery"
+
+  This is the system's primary mechanism for CREATIVE INSIGHT.
+  It finds hidden structure shared between unrelated domains.
+```
+
+**Query Enhancement:**
+
+```
+LITERAL QUERY: "How do I fix cache invalidation?"
+  → Returns symbols directly about cache invalidation
+  → Standard radical-match results
+
+ANALOGICAL QUERY: "What is cache invalidation LIKE?"
+  → Follows slip-links from cache-invalidation symbols
+  → Returns: "Cache invalidation is structurally analogous to
+     forest fire renewal (slip_strength: 0.7).
+
+     The mapping:
+       cache (Remember) ↔ forest (Tree)
+       invalidation (Error) ↔ fire (Fire)
+       staleness (Wilt) ↔ new growth (Bloom)
+       decay pattern ↔ renewal cycle
+
+     Consider: is your cache invalidation strategy a controlled
+     burn or an uncontrolled fire?"
+
+DISCOVERY QUERY: "What unexpected connections exist?"
+  → Return all slip-links with slip_strength > 0.5
+  → Ranked by novelty (most recently discovered first)
+  → These are the system's creative insights
+```
+
+Why This Matters:
+
+Without slip-links, the system only finds what it's looking for —
+symbols with matching radicals. WITH slip-links, the system discovers
+**structural analogies across domains** that no one asked about. This
+is genuine computational creativity: finding that cache invalidation
+and forest fires share a deep pattern, and making that insight
+available for reasoning.
+
+---
+
+## Mechanism 13 — Morphic Resonance
+
+### Source
+
+Sheldrake's morphic resonance hypothesis proposes that once a pattern
+has been established anywhere, it becomes **easier for that same pattern
+to occur elsewhere** — even without direct communication. Crystals that
+are hard to form become easier to crystallize worldwide once they have
+been done once. Rats that learn a maze make it easier for rats
+everywhere to learn the same maze.
+
+### Gap in Current Spec
+
+When two nodes in the mesh independently develop similar symbols, there
+is no mechanism for them to *find each other* without explicit
+broadcast. Similar discoveries on separate nodes require deliberate
+SYMBOL_BROADCAST to correlate. There is no passive discovery.
+
+### Integration
+
+Add a **morphic resonance field** — a passive, low-bandwidth background
+signal that lets nodes detect when distant nodes have developed symbols
+with similar semantic coordinates, *without* exchanging the symbols
+themselves.
+
+```
+MORPHIC RESONANCE PROTOCOL
+═══════════════════════════
+
+STEP 1 — FIELD EMISSION (passive, periodic)
+  Every node periodically emits a "resonance digest":
+  - NOT a symbol list
+  - A BLURRED DENSITY MAP of where symbols cluster in semantic space
+  - No individual symbol data shared
+  - Fixed size: ~500 bytes regardless of symbol count
+  - Frequency: every 100 heartbeats (slow background)
+
+STEP 2 — RESONANCE DETECTION
+  When node B receives node A's digest:
+    For each region in A's fingerprint:
+      Compare against B's own density map
+      If overlap detected (similar cluster in similar region):
+        → "Morphic resonance" detected
+        → B sends RESONANCE_PING to A
+
+STEP 3 — VOLUNTARY EXCHANGE
+  On receiving RESONANCE_PING:
+    A can choose to share symbols in the matching region
+    via standard SYMBOL_BROADCAST
+    Or ignore the ping (no obligation)
+
+  If exchange happens:
+    Both nodes gain corroborating evidence
+    → Independent discovery = STRONG evidence
+    → Trust scores increase for matching symbols
+```
+
+**Resonance Digest Schema:**
+
+```json
+{
+  "$id": "https://qrrune.local/schemas/resonance-digest.json",
+  "title": "ResonanceDigest",
+  "type": "object",
+  "required": ["node_id", "timestamp", "semantic_fingerprint"],
+  "properties": {
+    "node_id":   { "type": "string" },
+    "timestamp": { "type": "integer" },
+    "semantic_fingerprint": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "region": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 3, "maxItems": 3,
+            "description": "Centroid [sem_x, sem_y, sem_z] of cluster"
+          },
+          "radius":         { "type": "number",
+                              "description": "Semantic radius of cluster" },
+          "density":        { "type": "integer",
+                              "description": "Number of symbols in this cluster" },
+          "dominant_domain":{ "type": ["string", "null"],
+                              "description": "Most common domain in this cluster" },
+          "avg_trust":      { "type": "number",
+                              "description": "Average trust score in cluster" }
+        }
+      },
+      "description": "Blurred density map — no individual symbol data leaked"
+    }
+  }
+}
+```
+
+**New Mesh Message Types:**
+
+```
+RESONANCE_DIGEST
+  Sender:  all peers (periodic, slow — every 100 heartbeats)
+  Payload: semantic fingerprint (blurred density map)
+  Purpose: "Here is the general shape of my knowledge"
+  Size:    ~500 bytes fixed
+  TTL:     2 (neighbors + their neighbors)
+
+RESONANCE_PING
+  Sender:  peer that detected overlap
+  Payload: { matching_region, my_density, request: "SYMBOL_EXCHANGE?" }
+  Purpose: "We independently discovered similar things — compare notes?"
+  Response: SYMBOL_BROADCAST of matching region (voluntary)
+```
+
+**Why Morphic > Broadcast:**
+
+| Property        | Broadcast (current)           | Morphic Resonance (new)             |
+|-----------------|-------------------------------|-------------------------------------|
+| Data shared     | Full symbols (~2KB each)      | Density map (~500B total)           |
+| Receiver load   | Process every symbol          | Process only matching regions       |
+| Scaling         | O(n) with symbol count        | O(1) — fixed digest size            |
+| Direction       | Push: you get everything      | Pull: you only get what resonates   |
+| Serendipity     | None — you get what was sent  | High — discover unexpected overlaps |
+| Privacy         | Full symbol data exposed      | Only aggregate shape exposed        |
+
+---
+
+## Mechanism 14 — Kin Recognition
+
+### Source
+
+Suzanne Simard proved that mother trees preferentially route nutrients
+to *their own seedlings* over unrelated trees through the mycorrhizal
+network. The fungal network enables **kin recognition** — trees can
+distinguish their offspring from strangers and allocate resources
+accordingly.
+
+### Gap in Current Spec
+
+All symbols in the galaxy are peers. A symbol's lineage is tracked
+(parent_id, generation) but it has no effect on routing or resource
+allocation. A newly created glyph gets no preferential treatment from
+its parent. There is no concept of "family."
+
+### Integration
+
+Symbols that share lineage (common parent or grandparent) form **kin
+clusters**. Resources flow preferentially within kin clusters, and
+parent symbols actively nourish their descendants.
+
+```
+KIN RECOGNITION RULES
+═════════════════════
+
+RULE 1 — KIN DETECTION
+  Two symbols are KIN if:
+    - They share a lineage_parent (siblings)
+    - One is the other's lineage_parent (parent-child)
+    - They share a grandparent (cousins) — max depth 3
+  Kin affinity = 1.0 / (lineage_distance + 1)
+
+RULE 2 — PREFERENTIAL ROUTING
+  Tendrils connecting kin symbols get a routing bonus:
+    effective_diameter = actual_diameter * (1.0 + kin_affinity * 0.3)
+  Kin-connected paths are preferred, all else being equal.
+
+RULE 3 — NOURISHMENT FLOW
+  During consolidation, parent symbols with trust >= 'trusted'
+  transfer a trust bonus to child symbols:
+    child.trust_score += parent.trust_score * 0.05
+  Capped at parent's trust_score — cannot boost above self.
+
+RULE 4 — KIN DEFENSE
+  When a symbol's trust drops below 0.2 (endangered):
+    Kin symbols within distance 2 receive an alert
+    Kin with trust >= 0.7 can "vouch":
+      → Transfer 0.05 trust to endangered kin
+    Maximum 3 vouches per endangered symbol per cycle
+    Prevents extinction of valid concepts from temporary disuse.
+
+RULE 5 — KIN CLUSTER BOUNDARIES
+  Kin clusters are soft boundaries, not hard partitions.
+  A symbol can have kin in multiple clusters.
+  Cross-cluster tendrils are NOT penalized.
+```
+
+**Schema Addition:**
+
+```sql
+CREATE TABLE IF NOT EXISTS kin_relations (
+    symbol_a     TEXT    NOT NULL,
+    symbol_b     TEXT    NOT NULL,
+    relationship TEXT    NOT NULL,  -- parent|child|sibling|cousin
+    distance     INTEGER NOT NULL,  -- lineage hops
+    affinity     REAL    NOT NULL,  -- 1.0 / (distance + 1)
+    PRIMARY KEY (symbol_a, symbol_b),
+    FOREIGN KEY (symbol_a) REFERENCES symbols(id),
+    FOREIGN KEY (symbol_b) REFERENCES symbols(id)
+);
+
+CREATE INDEX idx_kin_symbol_a ON kin_relations(symbol_a);
+CREATE INDEX idx_kin_symbol_b ON kin_relations(symbol_b);
+CREATE INDEX idx_kin_affinity ON kin_relations(affinity);
+```
+
+**Kin Relation JSON Schema:**
+
+```json
+{
+  "$id": "https://qrrune.local/schemas/kin-relation.json",
+  "title": "KinRelation",
+  "type": "object",
+  "required": ["symbol_a", "symbol_b", "relationship", "distance", "affinity"],
+  "properties": {
+    "symbol_a":     { "type": "string", "format": "uuid" },
+    "symbol_b":     { "type": "string", "format": "uuid" },
+    "relationship": {
+      "type": "string",
+      "enum": ["parent", "child", "sibling", "cousin"]
+    },
+    "distance": { "type": "integer", "minimum": 1, "maximum": 3 },
+    "affinity":  { "type": "number",  "minimum": 0.0, "maximum": 1.0 }
+  }
+}
+```
+
+**Consolidation Integration:**
+
+```
+CONSOLIDATION — KIN NOURISHMENT SUBSTAGE (new)
+═══════════════════════════════════════════════
+
+Runs after:  N3 (Deep Sleep)
+Runs before: Anticipation Engine
+
+FOR each trusted/axiom symbol with children:
+  FOR each child in kin_relations where relationship = 'child':
+    IF child.trust_score < parent.trust_score:
+      child.trust_score += parent.trust_score * 0.05
+      child.trust_score = min(child.trust_score, parent.trust_score)
+      LOG: "Kin nourishment: {parent} → {child} (+{delta})"
+
+FOR each endangered symbol (trust < 0.2):
+  kin = query kin_relations WHERE distance <= 2
+                            AND kin.trust_score >= 0.7
+  vouches_received = 0
+  FOR each eligible kin:
+    IF vouches_received < 3:
+      endangered.trust_score += 0.05
+      vouches_received++
+      LOG: "Kin defense: {kin} vouched for {endangered}"
+```
+
+---
+
+## Mechanism 15 — Mycoremediation Error Correction
+
+### Source
+
+Paul Stamets documented how fungi neutralize environmental toxins
+(pesticides, petroleum, heavy metals) by **breaking them into harmless
+components** through enzymatic decomposition. The fungus does not reject
+the toxin — it *processes* it into something safe. Mycoremediation is
+remediation, not rejection.
+
+### Gap in Current Spec
+
+When a corrupted glyph enters the system, the current behavior is
+undefined. The spec mentions that corrupted glyphs are "remediated, not
+rejected" but provides no mechanism for how remediation actually works.
+
+### Integration
+
+Define a **mycoremediation pipeline** for corrupted, malformed, or
+contradictory glyphs.
+
+```
+MYCOREMEDIATION PIPELINE
+═════════════════════════
+
+INPUT: Corrupted glyph (malformed, contradictory, or injection attempt)
+
+STAGE 1 — TOXIN DETECTION
+  Scan incoming glyph for corruption markers:
+  □ Invalid radical IDs (not in CR-01 through CR-60)
+  □ Stroke count > 14 (over budget)
+  □ Self-contradictory grid (same radical in two positions)
+  □ Trust-state claiming 'axiom' without axiom registry match
+  □ Sem coordinates outside [-1.0, 1.0] bounds
+  □ Embedded directives in string fields (injection attempt)
+  □ Halo values outside valid ranges
+  □ Cyclic lineage (symbol is its own ancestor)
+  IF any marker detected → route to remediation
+
+STAGE 2 — DECOMPOSITION
+  Break the corrupted glyph into constituent radicals:
+  - Valid radicals → salvage pool
+  - Invalid radicals → discard with log entry
+  - Metadata → quarantine (do not trust halo from corrupted source)
+  DO NOT discard the entire glyph. Extract every usable part.
+
+STAGE 3 — NEUTRALIZATION
+  For each salvaged radical:
+  - Verify against axiom radical definitions (CR-01..CR-60)
+  - If radical is valid → clean and re-register
+  - If radical is close-but-wrong → attempt correction:
+    Example: "CR-61" (invalid) → nearest valid = CR-60 (Infinity)
+    Log correction with confidence score
+  - If radical is unrecognizable → discard, log as unknown
+
+STAGE 4 — REASSEMBLY (optional)
+  If enough clean radicals were salvaged (>= 2):
+  - Re-compose a new glyph from salvaged radicals
+  - Assign trust_state = 'dream' (starts from zero trust)
+  - Tag with remediation metadata
+  - Insert into dream buffer for standard consolidation
+
+STAGE 5 — AUDIT LOG
+  Every remediation event is logged (see schema below)
+```
+
+**Remediation Log Schema:**
+
+```sql
+CREATE TABLE IF NOT EXISTS remediation_log (
+    id                   TEXT    PRIMARY KEY,
+    timestamp            INTEGER NOT NULL,
+    corruption_type      TEXT    NOT NULL,
+        -- injection_attempt: embedded directives detected
+        -- malformed:         structural violations
+        -- contradictory:     self-conflicting data
+        -- out_of_bounds:     values outside valid ranges
+        -- cyclic_lineage:    impossible ancestry
+    source_node          TEXT,
+    original_size_bytes  INTEGER,
+    radicals_salvaged    INTEGER NOT NULL DEFAULT 0,
+    radicals_discarded   INTEGER NOT NULL DEFAULT 0,
+    reassembled          INTEGER NOT NULL DEFAULT 0,  -- BOOLEAN
+    new_dream_id         TEXT,
+    corruption_details   TEXT,  -- JSON array of violation objects
+    FOREIGN KEY (new_dream_id) REFERENCES dreams(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_remediation_type ON remediation_log(corruption_type);
+CREATE INDEX IF NOT EXISTS idx_remediation_time ON remediation_log(timestamp);
+```
+
+**Remediation Report JSON Schema:**
+
+```json
+{
+  "$id": "https://qrrune.local/schemas/remediation-report.json",
+  "title": "RemediationReport",
+  "type": "object",
+  "required": [
+    "id", "timestamp", "corruption_type",
+    "radicals_salvaged", "radicals_discarded", "reassembled"
+  ],
+  "properties": {
+    "id":        { "type": "string", "format": "uuid" },
+    "timestamp": { "type": "integer" },
+    "corruption_type": {
+      "type": "string",
+      "enum": [
+        "injection_attempt", "malformed",
+        "contradictory", "out_of_bounds", "cyclic_lineage"
+      ]
+    },
+    "source_node":          { "type": ["string", "null"] },
+    "original_size_bytes":  { "type": ["integer", "null"] },
+    "radicals_salvaged":    { "type": "integer", "minimum": 0 },
+    "radicals_discarded":   { "type": "integer", "minimum": 0 },
+    "salvaged_radical_ids": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^CR-[0-6][0-9]$" }
+    },
+    "discarded_radical_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "May contain invalid IDs — that is the point"
+    },
+    "reassembled":  { "type": "boolean" },
+    "new_dream_id": { "type": ["string", "null"], "format": "uuid" },
+    "corruption_details": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "field":    { "type": "string" },
+          "expected": { "type": "string" },
+          "actual":   { "type": "string" },
+          "severity": {
+            "type": "string",
+            "enum": ["minor", "major", "critical"]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Example — Remediation in Action:**
+
+```
+INCOMING CORRUPTED GLYPH FROM MESH:
+  {
+    "radicals": [
+      { "id": "CR-54", ... },
+      { "id": "CR-99", ... },  ← INVALID: no such radical
+      { "id": "CR-32", ... },
+      { "id": "CR-08", ... }
+    ],
+    "trust_state": "axiom",  ← SUSPICIOUS: not in axiom registry
+    "sem_x": 5.7,            ← INVALID: outside [-1.0, 1.0]
+    "halo": {
+      "trust": 1.0,          ← SUSPICIOUS: claiming perfect trust
+      "activation": 1.0
+    }
+  }
+
+STAGE 1 — TOXIN DETECTION:
+  [x] Invalid radical ID: CR-99
+  [x] False axiom claim
+  [x] sem_x out of bounds (5.7 > 1.0)
+  [x] Suspicious trust/activation values
+  → Classified: "injection_attempt" (severity: critical)
+
+STAGE 2 — DECOMPOSITION:
+  Salvaged: CR-54 (Error), CR-32 (Remember), CR-08 (Water)
+  Discarded: CR-99 (unknown)
+  Metadata: QUARANTINED (do not trust any halo values)
+
+STAGE 3 — NEUTRALIZATION:
+  CR-54 ✓ valid
+  CR-32 ✓ valid
+  CR-08 ✓ valid
+  CR-99 → nearest match: CR-60 (Infinity)? No — distance too great.
+          → Discard entirely.
+
+STAGE 4 — REASSEMBLY:
+  3 clean radicals salvaged (>= 2 threshold)
+  New glyph: A=CR-54  B=(empty)  C=CR-32  D=CR-08
+  trust_state = 'dream'
+  trust_score = 0.15 (low — remediated source)
+  remediated  = true
+  → Inserted into dream buffer
+
+STAGE 5 — AUDIT LOG:
+  {
+    "corruption_type": "injection_attempt",
+    "source_node": "node-X",
+    "radicals_salvaged": 3,
+    "radicals_discarded": 1,
+    "reassembled": true,
+    "new_dream_id": "dream-remediated-001",
+    "corruption_details": [
+      { "field": "radicals[1].id",  "expected": "CR-01..CR-60",
+        "actual": "CR-99",          "severity": "critical" },
+      { "field": "trust_state",     "expected": "dream",
+        "actual": "axiom",          "severity": "critical" },
+      { "field": "sem_x",           "expected": "[-1.0, 1.0]",
+        "actual": "5.7",            "severity": "major" }
+    ]
+  }
+
+RESULT:
+  - Corrupted glyph was NOT rejected — it was remediated
+  - 3 of 4 radicals were salvaged
+  - A new dream was created from the clean parts
+  - The injection attempt was logged for security review
+  - The system extracted value from toxic input
+```
+
+---
+
+## Mechanism 16 — Shadow Pockets
+
+### Source
+
+The Archive for Research in Archetypal Symbolism (ARAS) and *The Book
+of Symbols* assert that every living symbol has three dimensions:
+1. **Etymological roots** — where it came from
+2. **Play of opposites** — its shadow, its inverse
+3. **Paradox** — the contradiction it holds within itself
+
+A symbol without a shadow is dead. The shadow is not the enemy of
+meaning — it is the *other half* of meaning.
+
+### Gap in Current Spec
+
+The ILE has a "three-axis interpretation" concept (etymological,
+shadow/opposite, paradox) but there is no structural home for shadow
+symbols. Shadows are computed on-the-fly during interpretation. They
+have no persistent existence, no accumulated evidence, no trust score.
+The shadow is ephemeral when it should be architectural.
+
+### Integration
+
+For every noun-pocket in the galaxy, create a mirrored **shadow pocket**
+that contains the inversions, negations, and paradoxes of the symbols
+in the primary pocket.
+
+```
+SHADOW POCKET ARCHITECTURE
+═══════════════════════════
+
+  PRIMARY POCKET               SHADOW POCKET
+  ┌─────────────────┐          ┌─────────────────┐
+  │  "Cache Server" │◄────────►│ "Cache Absence" │
+  │  CR-32 + CR-16  │  mirror  │  CR-59 + CR-16  │
+  │  trust: 0.85    │   link   │  trust: 0.60    │
+  │  domain: tree   │          │  domain: tree   │
+  │                 │          │                 │
+  │  "Memory Leak"  │◄────────►│  "Memory Seal"  │
+  │  CR-32 + CR-08  │  mirror  │  CR-32 + CR-45  │
+  │  trust: 0.78    │          │  trust: 0.55    │
+  └─────────────────┘          └─────────────────┘
+
+  Shadow symbols are constructed by:
+  1. Horizontal mirror of key radical (inversion)
+  2. Substitution with antithetical radical
+  3. Negation via CR-59 (Null) prefix
+
+  Shadow pockets have their own trust scores,
+  tendrils, and lifecycle — they are REAL pockets,
+  not computed projections.
+```
+
+**Shadow Construction Rules:**
+
+```
+RULE 1 — AUTOMATIC SHADOW GENERATION
+  When a symbol reaches trust_state = 'trusted':
+    Generate its shadow symbol automatically
+    Shadow trust_state = 'theory' (must earn its own trust)
+    Insert into the corresponding shadow pocket
+
+RULE 2 — SHADOW RADICAL MAPPING
+
+  Primary → Shadow    Relationship
+  ────────────────────────────────────────────
+  CR-01 Tree   → CR-09 Fire    Growth ↔ Destruction
+  CR-08 Water  → CR-09 Fire    Flow   ↔ Consumption
+  CR-32 Remember→CR-40 Release Store  ↔ Forget
+  CR-34 Create → CR-25 Wilt    Build  ↔ Decay
+  CR-44 Bond   → CR-27 Split   Connect↔ Sever
+  CR-45 Guard  → CR-54 Error   Protect↔ Breach
+  CR-57 Truth  → CR-58 Unknown Verified↔Uncertain
+  CR-41 Parent → CR-42 Child   Above  ↔ Below
+  CR-24 Bloom  → CR-25 Wilt    Expand ↔ Contract
+  CR-39 Focus  → CR-30 Drift   Attend ↔ Wander
+
+  If no canonical shadow exists for a radical:
+    Use CR-59 (Null) as universal shadow prefix
+    "The absence of X"
+
+RULE 3 — PARADOX SYMBOLS
+  When a symbol AND its shadow both reach trust >= 0.7:
+    Generate a PARADOX symbol that contains BOTH
+    Grid: A=primary_determinative  B=shadow_determinative
+          C=CR-44(Bond)            D=CR-28(Twist)
+    Meaning: "The union of X and not-X"
+    These are the deepest, most powerful symbols in the system.
+    They encode the ARAS principle that paradox IS meaning.
+
+RULE 4 — SHADOW POCKET ROUTING
+  Queries can explicitly request shadow results:
+    query("What is NOT cache?")             → search shadow pockets
+    query("What is the opposite of growth?") → shadow lookup
+    query("What paradox does fire contain?") → paradox symbols
+```
+
+**Schema Additions:**
+
+```sql
+ALTER TABLE symbols ADD COLUMN is_shadow      BOOLEAN DEFAULT FALSE;
+ALTER TABLE symbols ADD COLUMN shadow_of      TEXT;   -- primary symbol ID
+ALTER TABLE symbols ADD COLUMN is_paradox     BOOLEAN DEFAULT FALSE;
+ALTER TABLE symbols ADD COLUMN paradox_primary TEXT;  -- primary ID
+ALTER TABLE symbols ADD COLUMN paradox_shadow  TEXT;  -- shadow ID
+
+CREATE INDEX idx_symbols_shadow    ON symbols(is_shadow)  WHERE is_shadow = TRUE;
+CREATE INDEX idx_symbols_shadow_of ON symbols(shadow_of)  WHERE shadow_of IS NOT NULL;
+CREATE INDEX idx_symbols_paradox   ON symbols(is_paradox) WHERE is_paradox = TRUE;
+```
+
+**JSON Schema Additions (in EncodedSymbol):**
+
+```json
+{
+  "is_shadow": {
+    "type": "boolean", "default": false,
+    "description": "True if this symbol is the shadow/inverse of another"
+  },
+  "shadow_of": {
+    "type": ["string", "null"], "format": "uuid",
+    "description": "ID of the primary symbol this is the shadow of"
+  },
+  "shadow_id": {
+    "type": ["string", "null"], "format": "uuid",
+    "description": "ID of this symbol's shadow (if generated)"
+  },
+  "is_paradox": {
+    "type": "boolean", "default": false,
+    "description": "True if this symbol encodes the union of a primary and its shadow"
+  },
+  "paradox_sources": {
+    "type": ["object", "null"],
+    "properties": {
+      "primary_id": { "type": "string", "format": "uuid" },
+      "shadow_id":  { "type": "string", "format": "uuid" }
+    },
+    "description": "The primary and shadow symbols that generated this paradox"
+  }
+}
+```
+
+Why This Matters:
+
+Without shadow pockets, the system only knows what things ARE. With
+them, it also knows what things ARE NOT — and more powerfully, it knows
+the PARADOXES that arise when being and not-being coexist. "Fire
+destroys trees yet fire renews forests" is not a contradiction to be
+resolved — it is a paradox symbol to be preserved. The system gains
+depth, nuance, and the capacity for dialectical reasoning.
+
+---
+
+## Mechanism 17 — Kami Threshold Emergence
+
+### Source
+
+In Shinto ontology, kami is not a fixed category — it is a **quality
+that any entity can possess** when it exceeds a threshold of
+extraordinariness. A waterfall can be kami. A sword can be kami. A
+person can be kami. Motoori Norinaga defined it: "Anything possessing
+eminent quality out of the ordinary and awe-inspiring is called kami."
+
+Kami-nature is **emergent**, not assigned.
+
+### Gap in Current Spec
+
+The spec mentions kami as a metaphor and maps it to the `sacredness`
+AEL channel. But there is no system-level event triggered when a symbol
+crosses the kami threshold. Nothing *happens* when a symbol becomes
+extraordinary — it just has a high number in a field.
+
+### Integration
+
+Define the **kami emergence event** — a system-level event triggered
+when a symbol's combined metadata crosses a computed threshold. When a
+symbol becomes kami, the system responds with specific architectural
+consequences.
+
+```
+KAMI THRESHOLD COMPUTATION
+══════════════════════════
+
+  kami_score = (
+    trust_score          * 0.25 +
+    activation           * 0.20 +
+    connectivity_norm    * 0.20 +
+    (1.0 - decay_inverted) * 0.15 +
+    ael.sacredness       * 0.10 +
+    ael.novelty          * 0.10
+  )
+
+  WHERE:
+    connectivity_norm  = min(1.0, connectivity / caern_threshold)
+    decay_inverted     = 1.0 - decay_score (fresh symbols score higher)
+
+  KAMI THRESHOLD: kami_score >= 0.85
+  When crossed → KAMI EMERGENCE EVENT fires
+```
+
+**Kami Emergence Event Consequences:**
+
+```
+WHEN a symbol crosses kami_score >= 0.85:
+
+  1. VISUAL TRANSFORMATION
+     halo_glow → 1.0   (maximum luminance)
+     color.saturation → 1.0   (pure color)
+     brightness → 1.0   (full visibility)
+
+  2. DECAY IMMUNITY
+     decay_score frozen at 1.0 — cannot decay while kami.
+
+  3. CAERN PROMOTION
+     If not already a caern → automatically promoted to caern.
+     Becomes a hub node in the knowledge graph.
+
+  4. SHADOW ACTIVATION
+     Shadow symbol (if it exists) is auto-activated.
+     Kami presence awakens its opposite — light casts shadow.
+
+  5. TENDRIL AMPLIFICATION
+     All tendrils connected to this symbol: diameter *= 1.5
+
+  6. NOTIFICATION
+     System emits KAMI_EMERGENCE mesh message:
+     {
+       "type": "KAMI_EMERGENCE",
+       "symbol_id": "uuid",
+       "kami_score": 0.89,
+       "domain": "fungi",
+       "timestamp": 1744400000
+     }
+
+  7. SUPERIMPLICATE CHECK
+     Overwatch evaluates alignment with superimplicate axioms.
+     If aligned → confirmed kami (stable).
+     If misaligned → flagged for review (kami can be revoked).
+```
+
+**Kami Revocation:**
+
+```
+Kami status is maintained as long as:
+  kami_score >= 0.80 (hysteresis: 0.85 to enter, 0.80 to exit)
+
+If kami_score drops below 0.80:
+  → KAMI_FADING event
+  → Visual transformations reverse (gradual, over 10 cycles)
+  → Decay immunity lifted
+  → Tendril boost reversed
+  → Caern status retained (earned independently)
+  → Shadow returns to previous activation state
+```
+
+**Schema Additions:**
+
+```sql
+ALTER TABLE symbols ADD COLUMN kami_score      REAL    DEFAULT 0.0;
+ALTER TABLE symbols ADD COLUMN is_kami         BOOLEAN DEFAULT FALSE;
+ALTER TABLE symbols ADD COLUMN kami_emerged_at INTEGER;
+ALTER TABLE symbols ADD COLUMN kami_faded_at   INTEGER;
+
+CREATE INDEX idx_symbols_kami ON symbols(is_kami) WHERE is_kami = TRUE;
+```
+
+**JSON Schema Additions:**
+
+```json
+{
+  "kami_score": {
+    "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.0,
+    "description": "Composite score. >= 0.85 triggers kami emergence."
+  },
+  "is_kami": {
+    "type": "boolean", "default": false,
+    "description": "True while kami_score >= 0.80 (hysteresis band)"
+  },
+  "kami_emerged_at": {
+    "type": ["integer", "null"],
+    "description": "Timestamp of most recent kami emergence"
+  },
+  "kami_faded_at": {
+    "type": ["integer", "null"],
+    "description": "Timestamp of most recent kami fading"
+  }
+}
+```
+
+---
+
+## Mechanism 18 — Holographic Fragment Reconstruction
+
+### Source
+
+Karl Pribram's holonomic brain theory proposes that memory is stored
+holographically — any piece of the hologram contains the whole image,
+at reduced resolution. Cut a holographic plate in half and each half
+still shows the complete image, just blurrier. Memory is distributed,
+not localized. Damage degrades gracefully rather than catastrophically.
+
+### Gap in Current Spec
+
+The pocket-galaxy is described as "holographic" but the implementation
+is standard database storage. If a pocket is lost, its symbols are
+gone. There is no mechanism for reconstructing lost symbols from
+surviving fragments elsewhere in the galaxy.
+
+### Integration
+
+Implement **holographic redundancy** — every symbol's semantic
+signature is distributed across multiple pockets as compressed
+fragments. If the primary pocket is lost, the symbol can be
+reconstructed from fragments at reduced fidelity.
+
+```
+HOLOGRAPHIC STORAGE MODEL
+═════════════════════════
+
+  When a symbol reaches trust_state = 'trusted':
+    1. Compute its semantic signature:
+       sig = [sem_x, sem_y, sem_z, ac_ratio, domain,
+              radical_ids, fractal_depth]
+
+    2. Compress signature to FRAGMENT (lossy):
+       fragment = {
+         sem_centroid:       [sem_x, sem_y, sem_z],  // 3 floats
+         domain:             domain,                  // 1 enum
+         radical_hash:       hash(radical_ids),       // 1 uint32
+         ac_ratio_quantized: round(ac_ratio*4)/4      // 1 byte
+       }
+       Size: ~20 bytes (vs ~2KB full symbol)
+
+    3. Distribute fragment to N neighbor pockets:
+       N = min(5, number_of_neighbor_pockets)
+
+    4. Fragment tagged with:
+       origin_pocket_id, origin_symbol_id, fragment_fidelity
+```
+
+**Fragment Table Schema:**
+
+```sql
+CREATE TABLE IF NOT EXISTS fragments (
+    id                TEXT    PRIMARY KEY,
+    origin_symbol_id  TEXT    NOT NULL,
+    origin_pocket_id  TEXT    NOT NULL,
+    sem_x             REAL    NOT NULL,
+    sem_y             REAL    NOT NULL,
+    sem_z             REAL    NOT NULL,
+    domain            TEXT,
+    radical_hash      INTEGER NOT NULL,
+    ac_ratio_q        REAL    NOT NULL,
+    fragment_fidelity REAL    NOT NULL DEFAULT 0.5,
+    created_at        INTEGER NOT NULL,
+    verified          INTEGER NOT NULL DEFAULT 0  -- BOOLEAN
+);
+
+CREATE INDEX IF NOT EXISTS idx_fragments_origin ON fragments(origin_symbol_id);
+CREATE INDEX IF NOT EXISTS idx_fragments_sem    ON fragments(sem_x, sem_y, sem_z);
+CREATE INDEX IF NOT EXISTS idx_fragments_domain ON fragments(domain);
+```
+
+**Reconstruction Algorithm:**
+
+```
+SCENARIO: Pocket P is lost (node crash / corruption)
+
+STEP 1 — DETECT LOSS
+  Heartbeat from P missed for 3 cycles OR explicit DECAY_NOTICE.
+
+STEP 2 — GATHER FRAGMENTS
+  Query all neighbor pockets: fragments WHERE origin_pocket_id = P
+
+STEP 3 — RECONSTRUCT
+  fragments_found.count >= 3 → FULL: trust_state = 'theory'
+  fragments_found.count 1-2  → PARTIAL: trust_state = 'dream'
+  fragments_found.count == 0 → LOST: emit LOSS_ALERT if kami/caern
+
+STEP 4 — VERIFY
+  Cross-check against displacement vectors (Mech 6),
+  kin relations (Mech 14), inter-radical relations (Mech 7).
+  Each verification increases trust.
+```
+
+**JSON Schema:**
+
+```json
+{
+  "$id": "https://qrrune.local/schemas/fragment.json",
+  "title": "HolographicFragment",
+  "type": "object",
+  "required": [
+    "id", "origin_symbol_id", "origin_pocket_id",
+    "sem_x", "sem_y", "sem_z",
+    "radical_hash", "ac_ratio_q", "fragment_fidelity", "created_at"
+  ],
+  "properties": {
+    "id":               { "type": "string", "format": "uuid" },
+    "origin_symbol_id": { "type": "string", "format": "uuid" },
+    "origin_pocket_id": { "type": "string" },
+    "sem_x":  { "type": "number" },
+    "sem_y":  { "type": "number" },
+    "sem_z":  { "type": "number" },
+    "domain": { "type": ["string", "null"] },
+    "radical_hash":      { "type": "integer" },
+    "ac_ratio_q":        { "type": "number" },
+    "fragment_fidelity": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "created_at":        { "type": "integer" },
+    "verified":          { "type": "boolean", "default": false }
+  }
+}
+```
+
+---
+
+## Mechanism 19 — Token-to-Tablet Compression Pipeline
+
+### Source
+
+The historical evolution of writing from Sumerian clay tokens (8000 BCE)
+through envelope tokens (3500 BCE) to impressed tablets (3200 BCE) to
+abstract cuneiform (2600 BCE) represents a **four-stage compression
+pipeline**. Concrete physical objects became abstract marks through
+millennia of optimization. Each stage lost visual detail but gained
+processing speed and storage density.
+
+### Gap in Current Spec
+
+Glyphs have a `compression_q` value and informal references to "formal
+vs compact" variants, but there is no defined pipeline for how a glyph
+progresses through compression stages. The system has no concept of a
+glyph existing at multiple fidelity levels simultaneously.
+
+### Integration
+
+Define a **four-stage compression pipeline** mirroring the historical
+token-to-cuneiform evolution. Every glyph can exist at multiple
+compression levels. The appropriate level is selected based on context.
+
+```
+COMPRESSION PIPELINE
+════════════════════
+
+STAGE 1 — TOKEN (full fidelity)        compression_q: 1.0  ~2-4 KB
+  Complete glyph: all 14 dimensions, full halo, full AEL,
+  full lineage, typogenetic program, all strokes rendered.
+  Use: primary storage, detailed analysis, glyph editing.
+
+STAGE 2 — ENVELOPE (structural)        compression_q: 0.7  ~200-500 B
+  radical IDs + grid + sem coordinates + trust_state + domain + ac_ratio.
+  Dropped: strokes, full halo, AEL, typogenetics, lineage detail.
+  Use: inter-pocket routing, query results, working memory.
+
+STAGE 3 — TABLET (compressed ref)      compression_q: 0.4  ~50-100 B
+  radical_hash + sem_centroid + domain + trust_state.
+  Dropped: individual IDs, grid positions, all metadata.
+  Use: index entries, density maps, resonance digests.
+
+STAGE 4 — CUNEIFORM (maximum)          compression_q: 0.1  8 B
+  Single 64-bit hash: domain + sem_octant + trust_tier.
+  Use: bloom filters, existence checks, routing table keys.
+```
+
+**Multi-Level Storage:**
+
+```
+Every trusted symbol is stored at ALL FOUR levels simultaneously:
+  symbols table:   TOKEN level    (full glyph)
+  envelope_cache:  ENVELOPE level (working memory)
+  index entries:   TABLET level   (search index)
+  cuneiform_index: CUNEIFORM level (existence check)
+
+Query routing:
+  "Does this exist?"    → CUNEIFORM  (8 bytes, instant)
+  "What domain is it?"  → TABLET     (50 bytes, fast)
+  "Show me summary"     → ENVELOPE   (200 bytes, quick)
+  "Give me everything"  → TOKEN      (2KB, full decode)
+```
+
+**Schema Addition:**
+
+```sql
+-- Envelope cache for working memory
+CREATE TABLE IF NOT EXISTS envelope_cache (
+    symbol_id   TEXT    PRIMARY KEY,
+    radicals    TEXT    NOT NULL,  -- JSON array of radical IDs
+    grid        TEXT    NOT NULL,  -- JSON grid positions
+    sem_x       REAL    NOT NULL,
+    sem_y       REAL    NOT NULL,
+    sem_z       REAL    NOT NULL,
+    trust_state TEXT    NOT NULL,
+    domain      TEXT,
+    ac_ratio    REAL    NOT NULL,
+    cached_at   INTEGER NOT NULL,
+    FOREIGN KEY (symbol_id) REFERENCES symbols(id)
+);
+
+-- Cuneiform bloom filter entries
+CREATE TABLE IF NOT EXISTS cuneiform_index (
+    hash_key    INTEGER PRIMARY KEY,  -- 64-bit hash
+    symbol_id   TEXT    NOT NULL,
+    domain_code INTEGER NOT NULL,     -- domain enum as int
+    sem_octant  INTEGER NOT NULL,     -- octant of sem space (0–7)
+    trust_tier  INTEGER NOT NULL,     -- 0=dream 1=theory 2=trusted 3=axiom
+    FOREIGN KEY (symbol_id) REFERENCES symbols(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cuneiform_domain ON cuneiform_index(domain_code);
+CREATE INDEX IF NOT EXISTS idx_cuneiform_octant ON cuneiform_index(sem_octant);
+```
+
+Why This Matters:
+
+Without the compression pipeline, every query fetches a full TOKEN-
+level glyph (2KB+) even when the answer is "yes, it exists" (8 bytes).
+With the pipeline, the system serves the right fidelity for the right
+question — mirroring how human memory uses compressed representations
+rather than total recall for every access.
+
+---
+
 ## Related documents
 
 - [03 — RQ^R2 Encoder Module](03-rqr2-module.md)

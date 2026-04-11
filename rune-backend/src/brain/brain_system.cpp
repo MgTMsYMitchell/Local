@@ -420,10 +420,116 @@ CREATE TABLE IF NOT EXISTS tendrils (
     last_traversed TEXT,
     created_at     TEXT    DEFAULT (datetime('now')),
     tendril_type   TEXT    NOT NULL DEFAULT 'association'
+        -- association|causal|compositional|antithetical|dream_bridge|slip_link
 );
 CREATE INDEX IF NOT EXISTS idx_tendrils_source ON tendrils(source_symbol);
 CREATE INDEX IF NOT EXISTS idx_tendrils_target ON tendrils(target_symbol);
 CREATE INDEX IF NOT EXISTS idx_tendrils_weight ON tendrils(weight);
+
+-- ── Mechanism 9 (Physarum Anticipation): rhythm detection table ──────────────
+CREATE TABLE IF NOT EXISTS rhythms (
+    id              TEXT    PRIMARY KEY,
+    domain          TEXT,
+    radicals        TEXT,           -- JSON array of radical IDs
+    period_ms       INTEGER NOT NULL,
+    confidence      REAL    NOT NULL DEFAULT 0.0,
+    last_occurrence INTEGER,
+    next_predicted  INTEGER,
+    hit_count       INTEGER DEFAULT 0,
+    miss_count      INTEGER DEFAULT 0,
+    status          TEXT    DEFAULT 'active', -- active|dormant|expired
+    created_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rhythms_status ON rhythms(status);
+CREATE INDEX IF NOT EXISTS idx_rhythms_next   ON rhythms(next_predicted);
+
+-- ── Mechanism 14 (Kin Recognition): lineage-based kin clusters ───────────────
+CREATE TABLE IF NOT EXISTS kin_relations (
+    symbol_a     TEXT    NOT NULL,
+    symbol_b     TEXT    NOT NULL,
+    relationship TEXT    NOT NULL,  -- parent|child|sibling|cousin
+    distance     INTEGER NOT NULL,  -- lineage hops (1–3)
+    affinity     REAL    NOT NULL,  -- 1.0 / (distance + 1)
+    PRIMARY KEY (symbol_a, symbol_b)
+);
+CREATE INDEX IF NOT EXISTS idx_kin_symbol_a ON kin_relations(symbol_a);
+CREATE INDEX IF NOT EXISTS idx_kin_symbol_b ON kin_relations(symbol_b);
+CREATE INDEX IF NOT EXISTS idx_kin_affinity ON kin_relations(affinity);
+
+-- ── Mechanism 15 (Mycoremediation): corrupted-glyph remediation log ──────────
+CREATE TABLE IF NOT EXISTS remediation_log (
+    id                  TEXT    PRIMARY KEY,
+    timestamp           INTEGER NOT NULL,
+    corruption_type     TEXT    NOT NULL,
+        -- injection_attempt|malformed|contradictory|out_of_bounds|cyclic_lineage
+    source_node         TEXT,
+    original_size_bytes INTEGER,
+    radicals_salvaged   INTEGER NOT NULL DEFAULT 0,
+    radicals_discarded  INTEGER NOT NULL DEFAULT 0,
+    reassembled         INTEGER NOT NULL DEFAULT 0,  -- BOOLEAN 0/1
+    new_dream_id        TEXT,
+    corruption_details  TEXT    -- JSON array of violation objects
+);
+CREATE INDEX IF NOT EXISTS idx_remediation_type ON remediation_log(corruption_type);
+CREATE INDEX IF NOT EXISTS idx_remediation_time ON remediation_log(timestamp);
+
+-- ── Mechanism 18 (Holographic Fragments): distributed semantic fingerprints ──
+CREATE TABLE IF NOT EXISTS fragments (
+    id                TEXT    PRIMARY KEY,
+    origin_symbol_id  TEXT    NOT NULL,
+    origin_pocket_id  TEXT    NOT NULL,
+    sem_x             REAL    NOT NULL,
+    sem_y             REAL    NOT NULL,
+    sem_z             REAL    NOT NULL,
+    domain            TEXT,
+    radical_hash      INTEGER NOT NULL,
+    ac_ratio_q        REAL    NOT NULL,
+    fragment_fidelity REAL    NOT NULL DEFAULT 0.5,
+    created_at        INTEGER NOT NULL,
+    verified          INTEGER NOT NULL DEFAULT 0   -- BOOLEAN 0/1
+);
+CREATE INDEX IF NOT EXISTS idx_fragments_origin ON fragments(origin_symbol_id);
+CREATE INDEX IF NOT EXISTS idx_fragments_sem    ON fragments(sem_x, sem_y, sem_z);
+CREATE INDEX IF NOT EXISTS idx_fragments_domain ON fragments(domain);
+
+-- ── Mechanism 19 (Token-to-Tablet): multi-level compression caches ───────────
+CREATE TABLE IF NOT EXISTS envelope_cache (
+    symbol_id   TEXT    PRIMARY KEY,
+    radicals    TEXT    NOT NULL,  -- JSON array of radical IDs
+    grid        TEXT    NOT NULL,  -- JSON grid positions
+    sem_x       REAL    NOT NULL,
+    sem_y       REAL    NOT NULL,
+    sem_z       REAL    NOT NULL,
+    trust_state TEXT    NOT NULL,
+    domain      TEXT,
+    ac_ratio    REAL    NOT NULL,
+    cached_at   INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS cuneiform_index (
+    hash_key    INTEGER PRIMARY KEY,  -- 64-bit hash: domain+octant+trust_tier
+    symbol_id   TEXT    NOT NULL,
+    domain_code INTEGER NOT NULL,     -- domain enum as int
+    sem_octant  INTEGER NOT NULL,     -- which octant of sem space (0–7)
+    trust_tier  INTEGER NOT NULL      -- 0=dream 1=theory 2=trusted 3=axiom
+);
+CREATE INDEX IF NOT EXISTS idx_cuneiform_domain ON cuneiform_index(domain_code);
+CREATE INDEX IF NOT EXISTS idx_cuneiform_octant ON cuneiform_index(sem_octant);
+
+-- ── Mechanism 2 (Verb-Pockets): transformation sequence storage ───────────────
+CREATE TABLE IF NOT EXISTS verb_pockets (
+    id             TEXT    PRIMARY KEY,
+    participants   TEXT    NOT NULL DEFAULT '[]',  -- JSON array of symbol IDs
+    steps          TEXT    NOT NULL DEFAULT '[]',  -- JSON array of step objects
+    status         TEXT    NOT NULL DEFAULT 'active',
+        -- active|completed|suspended|archived
+    temporal_phase REAL    NOT NULL DEFAULT 0.0,   -- -1=past 0=current +1=anticipated
+    trust_state    TEXT    NOT NULL DEFAULT 'dream',
+    last_active    INTEGER,
+    created_at     INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_verbpocket_status ON verb_pockets(status);
+CREATE INDEX IF NOT EXISTS idx_verbpocket_phase  ON verb_pockets(temporal_phase);
 
     )sql");
 
