@@ -1,0 +1,140 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "rune — Debug (Linux / Termux)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/rune-backend/build/rune",
+      "args": ["rune.db", "wallet.json", "7070"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/rune-backend",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set disassembly flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "CMake: Build"
+    },
+    {
+      "name": "rune — Debug (Windows MSVC)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/rune-backend/build/rune.exe",
+      "args": ["rune.db", "wallet.json", "7070"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/rune-backend",
+      "environment": [],
+      "console": "integratedTerminal",
+      "preLaunchTask": "CMake: Build"
+    },
+    {
+      "name": "rune — Debug (Windows LLDB / clang)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/rune-backend/build/rune.exe",
+      "args": ["rune.db", "wallet.json", "7070"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/rune-backend",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb",
+      "preLaunchTask": "CMake: Build"
+    },
+    {
+      "name": "rune_brain — Debug (Linux / Termux)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/rune-backend/build/rune_brain",
+      "args": ["brain.db", "7071"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/rune-backend",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Set disassembly flavor to Intel",
+          "text": "-gdb-set disassembly-flavor intel",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "CMake: Build"
+    },
+    {
+      "name": "rune_brain — Debug (Windows MSVC)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/rune-backend/build/rune_brain.exe",
+      "args": ["brain.db", "7071"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/rune-backend",
+      "environment": [],
+      "console": "integratedTerminal",
+      "preLaunchTask": "CMake: Build"
+    },
+    {
+      "name": "chat-agent (Node.js)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/rune-agents/chat-agent.js",
+      "cwd": "${workspaceFolder}/rune-agents",
+      "console": "integratedTerminal",
+      "env": {
+        "RUNE_BACKEND_HOST": "127.0.0.1",
+        "RUNE_BACKEND_PORT": "7070"
+      }
+    },
+    {
+      "name": "node-agent (Node.js)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/rune-agents/node-agent.js",
+      "cwd": "${workspaceFolder}/rune-agents",
+      "console": "integratedTerminal",
+      "env": {
+        "RUNE_BACKEND_HOST": "127.0.0.1",
+        "RUNE_BACKEND_PORT": "7070",
+        "NODE_POLL_INTERVAL": "10000"
+      }
+    },
+    {
+      "name": "wallet-agent (Node.js)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/rune-agents/wallet-agent.js",
+      "cwd": "${workspaceFolder}/rune-agents",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "rune-web (Node.js)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/rune-web/index.js",
+      "cwd": "${workspaceFolder}/rune-web",
+      "console": "integratedTerminal",
+      "env": {
+        "PORT": "3000",
+        "RUNE_BACKEND_HOST": "127.0.0.1",
+        "RUNE_BACKEND_PORT": "7070"
+      }
+    }
+  ]
+}

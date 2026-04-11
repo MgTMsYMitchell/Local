@@ -1,0 +1,13 @@
+{
+  "name": "rune-web",
+  "version": "1.0.0",
+  "description": "Rune System — minimal web status UI",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

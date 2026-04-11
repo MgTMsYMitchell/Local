@@ -1,0 +1,73 @@
+name: CI — Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    name: C++ Build (Ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ libsqlite3-dev
+
+      - name: Configure CMake
+        working-directory: rune-backend
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        working-directory: rune-backend
+        run: cmake --build build --parallel
+
+      - name: Verify executables
+        working-directory: rune-backend
+        run: |
+          test -f build/rune       && echo "✓ rune built"
+          test -f build/rune_brain && echo "✓ rune_brain built"
+
+  node-agents:
+    name: Node.js Agents (lint check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check — rune-agents
+        working-directory: rune-agents
+        run: |
+          node --check chat-agent.js
+          node --check node-agent.js
+          node --check wallet-agent.js
+
+      - name: Syntax check — rune-web
+        working-directory: rune-web
+        run: |
+          node --check index.js
+
+      - name: Install rune-web deps
+        working-directory: rune-web
+        run: npm install
+
+  scripts-check:
+    name: Script lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ShellCheck
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck scripts/check-deps.sh || true
