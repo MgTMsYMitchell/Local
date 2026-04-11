@@ -5,13 +5,21 @@
 
   INTENT FOR GITHUB COPILOT CHAT / AI:
   - Declares all types, interfaces, and extension points used by brain_system.cpp.
-  - Stub agent classes are marked with  // EXTEND:  comments that describe
-    exactly what each agent should do when fully implemented.
+  - All 16 cognitive agents have real tick() implementations.
+  - WorkerAgent owns: heartbeat, strategy_execute, rune_trust.
+  - Specialized agents consume their own event types directly from the queue:
+      ChatAgent      → "chat_request"
+      WalletAgent    → "wallet_sign", "wallet_verify"
+      TorrentAgent   → "torrent_piece"
+      EdgeAgent      → "edge_task"
+      LibrarianAgent → "classify_symbol"
   - To add a new agent:
       1. Subclass AgentBase and override tick().
       2. Register it with BrainDb::register_agent() in brain_main.cpp.
-      3. Enqueue work via BrainDb::enqueue_event(); WorkerAgent picks it up.
+      3. Enqueue work via BrainDb::enqueue_event(); consume with pending_events_of_type().
       4. Emit results via AgentBase::emit() — EventBus routes to all subscribers.
+      5. If WorkerAgent should NOT consume the new event type, add it to
+         kSpecializedTypes in WorkerAgent::tick().
 */
 
 #include <atomic>
@@ -285,8 +293,11 @@ protected:
 // ─────────────────────────────────────────────────────────────────────────────
 // WorkerAgent — async event-queue consumer
 //   Tick interval: 100 ms (busy) / 1 000 ms (idle)
-//   Handles: heartbeat, chat_request, wallet_sign, strategy_execute, rune_trust
-//   EXTEND: add new event_type branches in handle() to activate new pathways.
+//   Handles: heartbeat, strategy_execute, rune_trust
+//   Skips event types owned by specialized agents (chat_request, wallet_sign,
+//   wallet_verify, torrent_piece, edge_task, classify_symbol).
+//   EXTEND: add new Worker-owned event_type branches in handle(); also add
+//           new specialized types to kSpecializedTypes in tick() to protect them.
 // ─────────────────────────────────────────────────────────────────────────────
 class WorkerAgent : public AgentBase {
 public:
@@ -342,60 +353,60 @@ private:
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stub agents — implement tick() to activate these cognitive pathways.
-// Each is pre-registered in brain_main.cpp so it appears in the agents table
-// and emits "agent_idle" events, making extension auditable from day one.
+// Specialized agents — each has a real tick() implementation and consumes
+// its own event type(s) directly from the queue via pending_events_of_type().
+// WorkerAgent skips these event types (see kSpecializedTypes in tick()).
 // ─────────────────────────────────────────────────────────────────────────────
 
-// EXTEND: ChatAgent
-//   Handle "chat_request" events dispatched by WorkerAgent.
-//   Integrate with an LLM endpoint via RUNE_LLM_URL (see rune-agents/chat-agent.js
-//   for the Node.js reference).  Post replies as "chat_response" events and
-//   persist to audit_log for heatmap analysis.
+// ChatAgent — LLM integration via RUNE_LLM_URL / RUNE_LLM_MODEL env vars
+//   Consumes: "chat_request" events from the queue.
+//   Posts replies as "chat_response" events; persists to audit_log.
+//   Falls back to echo mode when RUNE_LLM_URL is not set.
 class ChatAgent : public AgentBase {
 public:
     using AgentBase::AgentBase;
 protected:
-    int tick() override;   // stub — emits "agent_idle" every 5 s
+    int tick() override;
 };
 
-// EXTEND: WalletAgent
-//   Handle "wallet_sign" and "wallet_verify" events dispatched by WorkerAgent.
-//   Reuse wallet::sign() / wallet::verify() from src/wallet/wallet.hpp.
-//   Record every signing operation in audit_log for trust heatmap analysis.
+// WalletAgent — Ed25519 signing and verification
+//   Consumes: "wallet_sign" and "wallet_verify" events from the queue.
+//   Uses wallet::sign() / wallet::verify() from src/wallet/wallet.hpp.
+//   Records every operation in audit_log; emits trust delta on success.
 class WalletAgent : public AgentBase {
 public:
     using AgentBase::AgentBase;
 protected:
-    int tick() override;   // stub — emits "agent_idle" every 5 s
+    int tick() override;
 };
 
-// EXTEND: NodeAgent
-//   Monitor peer rune_brain instances listed in the nodes table.
-//   Poll /brain/health on each peer, update nodes.last_seen and nodes.status,
-//   and record trust deltas for unreachable peers via BrainDb::record_trust().
+// NodeAgent — peer rune_brain health monitoring
+//   Consumes: nodes table (polls each peer's /brain/health endpoint).
+//   Updates nodes.last_seen / nodes.status; records trust deltas for
+//   unreachable peers via BrainDb::record_trust().
 class NodeAgent : public AgentBase {
 public:
     using AgentBase::AgentBase;
 protected:
-    int tick() override;   // stub — emits "agent_idle" every 10 s
+    int tick() override;
 };
 
-// EXTEND: TorrentAgent
-//   Manage distributed chunked data across the node mesh.
-//   Enqueue "torrent_piece" events for WorkerAgent; track piece availability
-//   in the artifacts table (type = "torrent_piece") with appropriate TTLs.
+// TorrentAgent — distributed piece tracking across the node mesh
+//   Consumes: "torrent_piece" events from the queue.
+//   Stores pieces as artifacts (type="torrent_piece", TTL=7 days);
+//   emits periodic "torrent_status" reports with peer count.
 class TorrentAgent : public AgentBase {
 public:
     using AgentBase::AgentBase;
 protected:
-    int tick() override;   // stub — emits "agent_idle" every 30 s
+    int tick() override;
 };
 
-// EXTEND: EdgeAgent
-//   Handle low-latency edge-compute tasks (QR decode, image hash, etc.).
-//   Post results as "edge_result" events to the EventBus so visualisation
-//   layers can render them in real time without polling the DB.
+// EdgeAgent — low-latency edge-compute tasks (hashing, QR detection)
+//   Consumes: "edge_task" events from the queue.
+//   Supports task_type="hash" (FNV-1a 64-bit); "qr_detect" returns a
+//   not-linked notice until a QR library is linked.
+//   Posts results as "edge_result" events; audits every completed task.
 class EdgeAgent : public AgentBase {
 public:
     using AgentBase::AgentBase;

@@ -7,10 +7,13 @@
       * DB schema (SQLite, WAL): nodes, agents, runes, strategies, fusion_log,
         artifacts, audit, node_events, trust_ledger, size_assessment
       * Seed data: 24 Elder/Extended Futhark runes, 7 strategy runes
-      * Core agents: Heart (node_status), Worker (chat + wallet jobs),
+      * Core agents: Heart (node_status), Worker (strategy + trust jobs),
         GC (TTL, quarantine, pruning), RuneTrustManager (trust/TTL updates),
         RuneFusionEngine (simple pairwise fusion)
-      * Stub agents: ChatAgent, WalletAgent, NodeAgent, TorrentAgent, EdgeAgent
+      * Specialized agents: ChatAgent (LLM), WalletAgent (Ed25519),
+        NodeAgent (peer health), TorrentAgent (piece tracking),
+        EdgeAgent (hashing/edge compute), HousekeepingAgent, StrategyAgent,
+        EpicRuneAgent, OverwatchAgent, LibrarianAgent, LoadSimulatorAgent
       * EventBus (SSE-style async hook shared by all agents)
       * size_assessment: table-growth snapshots for compression benchmarks
   - When extending:
@@ -31,6 +34,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <string_view>
 #include <ctime>
 #include <iomanip>
 #include <sstream>
@@ -1738,15 +1742,32 @@ int HeartAgent::tick()
 
 int WorkerAgent::tick()
 {
-    auto events = db_.pending_events(10);
+    auto events = db_.pending_events(20);
     if (events.empty()) return 1000;   // idle back-off
 
+    // Event types consumed directly by their dedicated specialized agents.
+    // WorkerAgent must not mark these processed — doing so would kill the event
+    // before the owning agent can read it from the queue.
+    static const std::initializer_list<std::string_view> kSpecializedTypes = {
+        "chat_request", "wallet_sign", "wallet_verify",
+        "torrent_piece", "edge_task", "classify_symbol"
+    };
+
     for (const auto& ev : events) {
+        const std::string type = ev.value("event_type", "");
+
+        // Skip events owned by specialized agents — they consume these directly.
+        bool skip = false;
+        for (auto t : kSpecializedTypes) {
+            if (type == t) { skip = true; break; }
+        }
+        if (skip) continue;
+
         db_.increment_event_attempts(ev["id"].get<int>());
         try {
             handle(ev);
         } catch (const std::exception& e) {
-            db_.audit_log(name_, "handle_error", ev.value("event_type", "?"),
+            db_.audit_log(name_, "handle_error", type,
                           {{"error", e.what()}, {"event", ev}});
         }
         db_.mark_processed(ev["id"].get<int>());
@@ -1764,29 +1785,18 @@ void WorkerAgent::handle(const nlohmann::json& ev)
     const int id              = ev.value("id", -1);
 
     // ── Dispatch table ──────────────────────────────────────────────────────
-    // EXTEND: add new event_type branches here.
-    // Pattern: process → emit result → audit_log.
+    // WorkerAgent handles: heartbeat, strategy_execute, rune_trust.
+    // Specialized event types (chat_request, wallet_sign, wallet_verify,
+    // torrent_piece, edge_task, classify_symbol) are filtered out in tick()
+    // and consumed directly by their dedicated agents.
+    // To add a new Worker-owned event type:
+    //   1. Handle it here.
+    //   2. Remove it from kSpecializedTypes if it was previously specialized.
     // ────────────────────────────────────────────────────────────────────────
 
     if (type == "heartbeat") {
         // HeartAgent owns its own state; Worker just acknowledges.
         emit("worker_ack", {{"event_id", id}, {"type", type}});
-
-    } else if (type == "chat_request") {
-        // EXTEND via ChatAgent: call LLM backend with pl["message"].
-        // For now, stub-route to the ChatAgent queue.
-        emit("worker_dispatch", {
-            {"event_id", id}, {"type", type}, {"routed_to", "ChatAgent"}
-        });
-        db_.enqueue_event("Worker", "chat_route", pl, /*priority=*/1);
-        db_.audit_log(name_, "dispatch", "ChatAgent", pl);
-
-    } else if (type == "wallet_sign") {
-        // EXTEND via WalletAgent: call wallet::sign() from wallet.hpp.
-        emit("worker_dispatch", {
-            {"event_id", id}, {"type", type}, {"routed_to", "WalletAgent"}
-        });
-        db_.audit_log(name_, "dispatch", "WalletAgent", pl);
 
     } else if (type == "strategy_execute") {
         std::string strat_name = pl.value("strategy", "");
