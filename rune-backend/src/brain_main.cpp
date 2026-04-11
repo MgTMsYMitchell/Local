@@ -512,7 +512,7 @@ int main(int argc, char* argv[])
 
     // ── Launch agent threads ─────────────────────────────────────────────────
     std::vector<std::thread> threads;
-    threads.reserve(18);
+    threads.reserve(17);
 
     threads.emplace_back([&heart]()   { heart.run();   });
     threads.emplace_back([&worker]()  { worker.run();  });
@@ -565,7 +565,8 @@ int main(int argc, char* argv[])
         http_port, http_port, http_port,
         http_port, http_port, http_port, http_port, http_port,
         http_port, http_port, http_port, http_port, http_port,
-        http_port, http_port, http_port, http_port, http_port);
+        http_port, http_port, http_port, http_port, http_port,
+        http_port);
 
     std::cin.get();
 

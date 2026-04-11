@@ -1325,11 +1325,13 @@ int BrainDb::archive_old_audit(int days_old)
     {
         std::lock_guard<std::mutex> lk(mtx_);
         sqlite3_stmt* stmt = nullptr;
-        std::string sql =
+        // Use a negative offset bound as text, e.g. "-30 days"
+        std::string offset = "-" + std::to_string(days_old) + " days";
+        sqlite3_prepare_v2(db_,
             "SELECT id,agent,action,subject,detail,created_at FROM audit"
-            " WHERE created_at < datetime('now','-" + std::to_string(days_old) + " days')"
-            " LIMIT 200;";
-        sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
+            " WHERE created_at < datetime('now', ?) LIMIT 200;",
+            -1, &stmt, nullptr);
+        sqlite3_bind_text(stmt, 1, offset.c_str(), -1, SQLITE_TRANSIENT);
         auto txt = [&](int c) -> std::string {
             const unsigned char* p = sqlite3_column_text(stmt, c);
             return p ? reinterpret_cast<const char*>(p) : "";
@@ -2006,7 +2008,7 @@ int RuneFusionEngine::tick()
 
 int ChatAgent::tick()
 {
-    auto events = db_.pending_events_of_type("chat_route", 3);
+    auto events = db_.pending_events_of_type("chat_request", 3);
     if (events.empty()) return 5000;
 
     const char* llm_url   = std::getenv("RUNE_LLM_URL");
@@ -2551,16 +2553,16 @@ int LoadSimulatorAgent::tick()
 {
     if (tick_count_ > 5 && tick_count_ % 30 != 0) return 10000;
 
-    static int sim_counter = 0;
-    ++sim_counter;
+    static std::atomic<int> sim_counter{0};
+    int cnt = ++sim_counter;
 
     static const std::array<const char*,5> targets = {
         "Fehu","Ansuz","Dagaz","Perthro","Mannaz"
     };
-    std::string target = targets[sim_counter % targets.size()];
+    std::string target = targets[cnt % targets.size()];
 
     db_.enqueue_event("LoadSim", "chat_request", {
-        {"message", "Synthetic load test message #" + std::to_string(sim_counter)},
+        {"message", "Synthetic load test message #" + std::to_string(cnt)},
         {"sim", true}
     });
     db_.enqueue_event("LoadSim", "rune_trust", {
@@ -2569,12 +2571,12 @@ int LoadSimulatorAgent::tick()
     db_.enqueue_event("LoadSim", "classify_symbol", {
         {"radical", target},
         {"layer",   "OLD_NORSE"},
-        {"sem_x",   0.1 * (sim_counter % 10 - 5)},
-        {"sem_y",   0.1 * (sim_counter % 7 - 3)},
+        {"sem_x",   0.1 * (cnt % 10 - 5)},
+        {"sem_y",   0.1 * (cnt % 7 - 3)},
         {"sem_z",   0.0}
     });
 
-    emit("load_sim_tick", {{"sim_counter", sim_counter}, {"target", target}});
+    emit("load_sim_tick", {{"sim_counter", cnt}, {"target", target}});
     db_.update_agent_tick(name_);
     log("[LoadSim] tick #%d — injected events for rune=%s\n",
         tick_count_, target.c_str());
