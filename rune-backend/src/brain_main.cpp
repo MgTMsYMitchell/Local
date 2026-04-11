@@ -15,7 +15,9 @@
 */
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdio>
+#include <deque>
 #include <iostream>
 #include <mutex>
 #include <string>
@@ -287,6 +289,109 @@ static void setup_brain_routes(httplib::Server& srv,
         shutdown.store(true);
         srv.stop();
     });
+
+    // ── Root-level convenience aliases ───────────────────────────────────────
+
+    // GET /health — same as /brain/health
+    srv.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
+        auto c = db.all_counts();
+        json body = {
+            {"status",         "ok"},
+            {"nodes",          c.nodes},
+            {"agents",         c.agents},
+            {"runes",          c.runes},
+            {"strategies",     c.strategies},
+            {"fusion_entries", c.fusion_entries},
+            {"artifacts",      c.artifacts},
+            {"audit_entries",  c.audit_entries},
+            {"pending_events", c.pending_events},
+            {"trust_entries",  c.trust_entries}
+        };
+        cors(res);
+        res.set_content(body.dump(2), "application/json");
+    });
+
+    // GET /events — SSE live stream (alias for /brain/events/stream)
+    srv.Get("/events",
+        [&](const httplib::Request&, httplib::Response& res) {
+            res.set_header("Access-Control-Allow-Origin", "*");
+            res.set_header("Cache-Control", "no-cache");
+            res.set_header("Connection", "keep-alive");
+            res.set_content_provider(
+                "text/event-stream",
+                [&](size_t /*offset*/, httplib::DataSink& sink) {
+                    std::mutex cv_mtx;
+                    std::condition_variable cv;
+                    std::deque<std::string> queue;
+
+                    int sub_id = bus.subscribe([&](const BrainEvent& ev) {
+                        std::string msg = "event: " + ev.type + "\n"
+                                        + "data: "
+                                        + json({
+                                              {"source",    ev.source},
+                                              {"type",      ev.type},
+                                              {"payload",   ev.payload},
+                                              {"timestamp", ev.timestamp}
+                                          }).dump()
+                                        + "\n\n";
+                        {
+                            std::lock_guard<std::mutex> lk(cv_mtx);
+                            queue.push_back(std::move(msg));
+                        }
+                        cv.notify_one();
+                    });
+
+                    while (!shutdown.load(std::memory_order_relaxed)) {
+                        std::unique_lock<std::mutex> lk(cv_mtx);
+                        cv.wait_for(lk, std::chrono::seconds(15), [&] {
+                            return !queue.empty() || shutdown.load(std::memory_order_relaxed);
+                        });
+
+                        if (queue.empty()) {
+                            if (!sink.write(": keepalive\n\n", 14)) {
+                                break;
+                            }
+                            continue;
+                        }
+
+                        while (!queue.empty()) {
+                            auto& msg = queue.front();
+                            if (!sink.write(msg.data(), msg.size())) {
+                                bus.unsubscribe(sub_id);
+                                return false;
+                            }
+                            queue.pop_front();
+                        }
+                    }
+
+                    bus.unsubscribe(sub_id);
+                    sink.done();
+                    return false;
+                },
+                [](bool /*success*/) {}
+            );
+        });
+
+    // POST /event — enqueue an event (simplified payload: {"type":"...","message":"..."})
+    srv.Post("/event", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            std::string event_type = body.value("type", "note");
+            json payload = body;
+            payload.erase("type");
+            int id = db.enqueue_event("api", event_type, payload);
+
+            // Also broadcast immediately on the EventBus so SSE clients see it
+            bus.post(BrainEvent{"api", event_type, payload, utc_now()});
+
+            res.status = 201;
+            res.set_content(json({{"id", id}, {"status", "queued"}}).dump(2), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
 }
 
 // ── main ──────────────────────────────────────────────────────────────────────
@@ -361,17 +466,21 @@ int main(int argc, char* argv[])
 
     brain_log(
         "[brain] QRrune Cognitive Node running.\n"
+        "  GET  http://localhost:%d/health              (root alias)\n"
+        "  GET  http://localhost:%d/events              (SSE root alias)\n"
+        "  POST http://localhost:%d/event               (enqueue root alias)\n"
         "  GET  http://localhost:%d/brain/health\n"
         "  GET  http://localhost:%d/brain/runes\n"
         "  GET  http://localhost:%d/brain/strategies\n"
         "  GET  http://localhost:%d/brain/fusion\n"
         "  GET  http://localhost:%d/brain/trust\n"
         "  GET  http://localhost:%d/brain/events/recent\n"
-        "  GET  http://localhost:%d/brain/events/stream   (SSE)\n"
+        "  GET  http://localhost:%d/brain/events/stream (SSE)\n"
         "  POST http://localhost:%d/brain/events\n"
         "  POST http://localhost:%d/brain/trust\n"
         "  POST http://localhost:%d/brain/shutdown\n"
         "Press ENTER to stop.\n",
+        http_port, http_port, http_port,
         http_port, http_port, http_port, http_port, http_port,
         http_port, http_port, http_port, http_port, http_port);
 
