@@ -214,6 +214,30 @@ public:
     nlohmann::json symbols_query(const std::string& radical,
                                   const std::string& layer, int limit = 50);
 
+    // ── RQ^R2 Dream buffer ────────────────────────────────────────────────────
+    int  insert_dream(const nlohmann::json& doc);
+    nlohmann::json dreams_query(const std::string& dream_type = "",
+                                 double min_confidence = 0.0, int limit = 50);
+
+    // ── RQ^R2 Theory buffer ───────────────────────────────────────────────────
+    int  insert_theory(const nlohmann::json& doc);
+    nlohmann::json theories_query(const std::string& status = "", int limit = 50);
+
+    // ── RQ^R2 Trust escalation ────────────────────────────────────────────────
+    bool trust_escalate(int symbol_id, const std::string& new_state);
+
+    // ── RQ^R2 Tendrils (mycelium routing) ────────────────────────────────────
+    int  insert_tendril(const nlohmann::json& doc);
+    nlohmann::json tendrils_query(int source = 0, int target = 0,
+                                   const std::string& tendril_type = "",
+                                   int limit = 50);
+
+    // ── RQ^R2 Radicals registry ───────────────────────────────────────────────
+    nlohmann::json radicals_query(int tier = 0, const std::string& domain = "");
+
+    // ── RQ^R2 Consolidation cycle ─────────────────────────────────────────────
+    nlohmann::json consolidation_tick();
+
     // ── Knowledge substrate ────────────────────────────────────────────────────
     int  store_knowledge(const std::string& radical, const std::string& layer,
                          const nlohmann::json& entry);

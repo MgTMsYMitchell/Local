@@ -349,6 +349,123 @@ static void setup_brain_routes(httplib::Server& srv,
         res.set_content(db.query_knowledge(radical, limit).dump(2), "application/json");
     });
 
+    // GET /brain/dreams — query dream buffer
+    srv.Get("/brain/dreams", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        std::string type = req.has_param("type") ? req.get_param_value("type") : "";
+        double min_conf  = 0.0;
+        int limit        = 50;
+        if (req.has_param("min_confidence")) try { min_conf = std::stod(req.get_param_value("min_confidence")); } catch (...) {}
+        if (req.has_param("limit"))          try { limit    = std::stoi(req.get_param_value("limit")); }           catch (...) {}
+        res.set_content(db.dreams_query(type, min_conf, limit).dump(2), "application/json");
+    });
+
+    // POST /brain/dreams — insert a dream directly
+    srv.Post("/brain/dreams", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            int id = db.insert_dream(body);
+            res.status = 201;
+            res.set_content(json({{"id", id}}).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+
+    // GET /brain/theories — query theory buffer
+    srv.Get("/brain/theories", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        std::string status = req.has_param("status") ? req.get_param_value("status") : "";
+        int limit = 50;
+        if (req.has_param("limit")) try { limit = std::stoi(req.get_param_value("limit")); } catch (...) {}
+        res.set_content(db.theories_query(status, limit).dump(2), "application/json");
+    });
+
+    // POST /brain/theories — insert a theory directly
+    srv.Post("/brain/theories", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            int id = db.insert_theory(body);
+            res.status = 201;
+            res.set_content(json({{"id", id}}).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+
+    // POST /brain/trust_escalate — escalate a symbol's trust state
+    srv.Post("/brain/trust_escalate", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body      = json::parse(req.body);
+            int  id        = body.value("id", 0);
+            std::string ns = body.value("new_state", "");
+            if (id <= 0 || ns.empty()) {
+                res.status = 400;
+                res.set_content(json({{"error","id and new_state required"}}).dump(), "application/json");
+                return;
+            }
+            bool ok = db.trust_escalate(id, ns);
+            res.status = ok ? 200 : 400;
+            res.set_content(json({{"ok", ok}, {"new_state", ns}}).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+
+    // POST /brain/consolidate — trigger one consolidation (sleep) cycle
+    srv.Post("/brain/consolidate", [&](const httplib::Request&, httplib::Response& res) {
+        cors(res);
+        try {
+            auto report = db.consolidation_tick();
+            res.set_content(report.dump(2), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+
+    // GET /brain/tendrils — query mycelium connections
+    srv.Get("/brain/tendrils", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        int source = 0, target = 0, limit = 50;
+        std::string type;
+        if (req.has_param("source")) try { source = std::stoi(req.get_param_value("source")); } catch (...) {}
+        if (req.has_param("target")) try { target = std::stoi(req.get_param_value("target")); } catch (...) {}
+        if (req.has_param("limit"))  try { limit  = std::stoi(req.get_param_value("limit"));  } catch (...) {}
+        if (req.has_param("type"))   type = req.get_param_value("type");
+        res.set_content(db.tendrils_query(source, target, type, limit).dump(2), "application/json");
+    });
+
+    // POST /brain/tendrils — create a tendril connection
+    srv.Post("/brain/tendrils", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            int id = db.insert_tendril(body);
+            res.status = 201;
+            res.set_content(json({{"id", id}}).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+
+    // GET /brain/radicals — query radical inventory (CR-01 through CR-60)
+    srv.Get("/brain/radicals", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        int tier = 0;
+        std::string domain;
+        if (req.has_param("tier"))   try { tier = std::stoi(req.get_param_value("tier")); } catch (...) {}
+        if (req.has_param("domain")) domain = req.get_param_value("domain");
+        res.set_content(db.radicals_query(tier, domain).dump(2), "application/json");
+    });
+
     // GET /health — same as /brain/health
     srv.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
         auto c = db.all_counts();
