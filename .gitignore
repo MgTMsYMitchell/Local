@@ -1,5 +1,6 @@
 # ── Build artifacts ──────────────────────────────────────────────────────────
 rune-backend/build/
+QuantumFractalSystem/build/
 *.o
 *.obj
 *.exe
