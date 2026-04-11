@@ -341,6 +341,447 @@ alive — shaped by the act of being observed.
 
 ---
 
+## Mechanism 4 — Superimplicate Order
+
+### Source
+
+Beyond the implicate order, Bohm proposed a superimplicate order — a
+yet-deeper layer that organizes the implicate order itself. If the
+explicate is the visible world and the implicate is the hidden reality
+beneath it, the superimplicate is the *pattern that shapes the hidden
+reality*.
+
+### Gap in Current Spec
+
+The spec has two layers:
+- Explicate: the visible glyph (strokes, grid, rendered form)
+- Implicate: the halo metadata (color, trust, activation, etc.)
+
+There is no third layer. The rules that govern how glyphs form,
+transform, and relate are hardcoded in the engine, not represented
+within the symbolic substrate itself.
+
+### Integration
+
+Add the superimplicate layer: meta-glyphs stored as axioms that
+describe the encoding process itself. The system contains symbols that
+describe how symbols work.
+
+```
+THREE-ORDER MODEL
+═════════════════
+
+  ORDER 1 — EXPLICATE (visible)
+    What you see: strokes, radicals, grid layout, rendered glyph
+    Stored in:    glyph_data, strokes, grid
+    Analog:       the ink drop you can see
+
+  ORDER 2 — IMPLICATE (hidden metadata)
+    What you sense: color, trust, activation, connectivity, lineage
+    Stored in:      halo_json
+    Analog:         the ink drop stretched into glycerine — invisible
+                    but recoverable
+
+  ORDER 3 — SUPERIMPLICATE (rules-about-rules)
+    What governs:  how glyphs compose, how trust escalates,
+                   how dreams consolidate, how tendrils grow
+    Stored in:     axiom-class meta-glyphs in the symbols table
+    Analog:        the physics of glycerine itself — why rotation
+                   enfolds and unfolds
+```
+
+Meta-Glyph Axioms:
+
+```
+AXIOM-100: COMPOSITION LAW
+  Grid: A=CR-53(Rule)  B=CR-34(Create)  C=CR-42(Child)  D=CR-41(Parent)
+  Meaning: "The rule for creating children from parents"
+  Encodes: the 2x2 grid composition algorithm itself
+  Self-referential: this axiom was composed using the rules it describes
+
+AXIOM-101: TRUST ESCALATION LAW
+  Grid: A=CR-53(Rule)  B=CR-38(Dream)  C=CR-57(Truth)  D=CR-55(Time)
+  Meaning: "Dreams become truth over time according to rules"
+  Encodes: the dream → theory → trusted pipeline
+
+AXIOM-102: DECAY LAW
+  Grid: A=CR-53(Rule)  B=CR-25(Wilt)  C=CR-55(Time)  D=CR-40(Release)
+  Meaning: "Things wilt over time and are released"
+  Encodes: the exponential decay formula
+
+AXIOM-103: TENDRIL GROWTH LAW
+  Grid: A=CR-53(Rule)  B=CR-05(Vine)  C=CR-46(Feed)  D=CR-44(Bond)
+  Meaning: "Vines grow to feed through bonds"
+  Encodes: the Physarum routing algorithm
+
+AXIOM-104: SELF-DESCRIPTION LAW
+  Grid: A=CR-53(Rule)  B=CR-53(Rule)  C=CR-51(Agent)  D=CR-48(Observe)
+  Meaning: "The rule about rules: an agent observing itself"
+  Encodes: THIS MECHANISM — the superimplicate is self-describing
+  This is the strange loop that makes the system self-aware.
+```
+
+Why This Matters:
+
+If the superimplicate axioms are stored in the same substrate as regular
+symbols, agents can query the rules:
+
+```
+query("How does trust escalation work?")
+→ Returns: AXIOM-101 (Trust Escalation Law)
+→ The system can explain its own behavior in its own symbolic language
+```
+
+An agent can also detect contradictions between its behavior and its
+rules — if the engine is doing something that contradicts AXIOM-101,
+the Overwatch agent can flag it by comparing observed behavior against
+the superimplicate axioms.
+
+Schema Addition:
+
+```sql
+ALTER TABLE symbols ADD COLUMN is_superimplicate BOOLEAN DEFAULT FALSE;
+CREATE INDEX idx_symbols_superimplicate ON symbols(is_superimplicate)
+  WHERE is_superimplicate = TRUE;
+```
+
+JSON Schema Addition:
+
+```json
+{
+  "is_superimplicate": {
+    "type": "boolean",
+    "default": false,
+    "description": "True if this symbol encodes a rule about how the system itself operates (Bohm third order)"
+  },
+  "governs_process": {
+    "type": ["string", "null"],
+    "enum": [
+      "composition", "trust_escalation", "decay", "tendril_growth",
+      "consolidation", "routing", "encoding", "self_description", null
+    ],
+    "description": "Which system process this superimplicate axiom governs"
+  }
+}
+```
+
+---
+
+## Mechanism 5 — Pilot Wave Pre-Signal
+
+### Source
+
+Bohm's pilot wave theory (de Broglie-Bohm interpretation) proposes that
+a quantum particle is guided by an invisible wave that arrives at the
+destination before the particle does. The wave explores all possible
+paths, and the particle follows the optimal one. The wave carries
+information without the particle's mass.
+
+### Gap in Current Spec
+
+When a glyph is routed through the mesh, the full glyph is transmitted
+as a single unit. Receiving nodes have no advance notice. They cannot
+pre-warm caches, pre-allocate buffers, or begin predictive decoding.
+Every message arrival is a cold start.
+
+### Integration
+
+Before transmitting a full glyph, send a pilot signal — a
+lightweight metadata-only packet that travels the tendril network
+ahead of the full glyph.
+
+```
+ROUTING WITHOUT PILOT (current):
+  1. Node A encodes glyph (50ms)
+  2. Node A transmits full glyph (payload: ~2KB)
+  3. Node B receives (cold cache)
+  4. Node B decodes (80ms — no pre-warming)
+  Total: 130ms + network latency
+
+ROUTING WITH PILOT (new):
+  1. Node A encodes glyph (50ms)
+  2. Node A sends PILOT (payload: ~200 bytes)        ← NEW
+  3. Node B receives pilot (hot cache prep)           ← NEW
+     └── pre-loads relevant radicals into memory
+     └── pre-activates domain pockets
+     └── begins ILE prediction from halo alone
+  4. Node A sends full glyph (payload: ~2KB)
+  5. Node B receives + decodes (20ms — pre-warmed)   ← 4x FASTER
+  Total: 70ms + network latency (decode overlapped with transit)
+```
+
+Pilot Signal Schema:
+
+```json
+{
+  "type": "PILOT_SIGNAL",
+  "payload": {
+    "glyph_id": "uuid",
+    "halo_preview": {
+      "domain": "fungi",
+      "trust_state": "theory",
+      "ac_ratio": 0.25,
+      "activation": 0.7,
+      "sem_x": -0.3,
+      "sem_y": 0.5,
+      "sem_z": 0.2
+    },
+    "radical_hints": ["CR-04", "CR-44"],
+    "estimated_arrival_ms": 150,
+    "glyph_size_bytes": 2048,
+    "requires_dream_buffer": false,
+    "priority": "normal"
+  }
+}
+```
+
+New Mesh Message Type:
+
+```
+PILOT_SIGNAL
+  Sender:   any peer
+  Payload:  halo preview + radical hints + arrival estimate
+  Purpose:  "Something is coming — prepare for it"
+  Size:     ~200 bytes (10% of full glyph)
+  TTL:      1 (direct neighbors only — pilots don't relay)
+  Behavior: Recipient pre-warms caches, pre-activates pockets
+```
+
+Receiver Pre-Warm Algorithm:
+
+```rust
+fn handle_pilot(pilot: PilotSignal) {
+    // 1. Pre-load radicals
+    for radical_id in pilot.radical_hints {
+        radical_cache.warm(radical_id);
+    }
+
+    // 2. Pre-activate relevant pocket
+    let pocket = galaxy.find_pocket_by_domain(
+        pilot.halo_preview.domain
+    );
+    pocket.pre_activate();
+
+    // 3. Begin predictive ILE from halo alone
+    let prediction = ile.predict_from_halo(pilot.halo_preview);
+    prediction_cache.store(pilot.glyph_id, prediction);
+
+    // 4. Pre-allocate buffer
+    if pilot.requires_dream_buffer {
+        dream_buffer.reserve(pilot.glyph_size_bytes);
+    }
+
+    // When full glyph arrives, check prediction_cache first
+    // If prediction matches → VEL-FLASH instant decode
+}
+```
+
+---
+
+## Mechanism 6 — Displacement Cells
+
+### Source
+
+Jeff Hawkins describes "displacement cells" in cortical columns —
+neurons that encode the difference between where you are and where
+something else is. Not absolute position, but relative offset. This
+is how you know "the handle is to the left of the cup" regardless of
+where the cup is in space.
+
+### Gap in Current Spec
+
+Glyphs have absolute sem_x/y/z coordinates. Tendrils connect symbols
+but carry no spatial information. If you find symbol A, you cannot
+calculate where B is — you must search for B independently. The
+galaxy is navigable only by index lookup, not by spatial reasoning.
+
+### Integration
+
+Tendrils carry displacement vectors — the semantic distance and
+direction from source to target. Finding any symbol lets you dead-reckon
+to its neighbors without searching.
+
+```
+CURRENT TENDRIL:
+  source: symbol_A  (sem: 0.3, 0.5, -0.2)
+  target: symbol_B  (sem: 0.7, 0.1,  0.4)
+  weight: 0.85
+  type:   association
+  // To find B, you must look up B's coordinates independently
+
+ENHANCED TENDRIL:
+  source:       symbol_A  (sem: 0.3, 0.5, -0.2)
+  target:       symbol_B  (sem: 0.7, 0.1,  0.4)
+  weight:       0.85
+  type:         association
+  displacement: { dx: +0.4, dy: -0.4, dz: +0.6 }   ← NEW
+  // To find B from A: A.sem + displacement = B.sem
+  // No lookup required — pure spatial inference
+```
+
+Schema Addition:
+
+```sql
+ALTER TABLE tendrils ADD COLUMN displacement_x REAL;
+ALTER TABLE tendrils ADD COLUMN displacement_y REAL;
+ALTER TABLE tendrils ADD COLUMN displacement_z REAL;
+```
+
+Dead-Reckoning Navigation:
+
+```
+START: Found symbol A at (0.3, 0.5, -0.2)
+
+STEP 1: A has tendril to B with displacement (+0.4, -0.4, +0.6)
+  → B should be at (0.7, 0.1, 0.4)
+  → Navigate directly — no search needed
+
+STEP 2: B has tendril to C with displacement (-0.1, +0.3, +0.1)
+  → C should be at (0.6, 0.4, 0.5)
+  → Navigate directly — no search needed
+
+CHAIN: A → B → C via pure vector addition
+  Total displacement A→C: (+0.3, -0.1, +0.7)
+  → Store as shortcut tendril A→C for future use
+```
+
+Why This Matters:
+
+1. Search-free navigation — follow vectors instead of querying indexes
+2. Analogy detection — if A→B has the same displacement as C→D,
+   then A:B :: C:D (proportional analogy discovered structurally)
+3. Missing symbol inference — if you know A and the displacement
+   to B but B doesn't exist yet, you know where it should be in
+   semantic space. The system predicts unfilled gaps.
+
+JSON Schema Addition (in Tendril):
+
+```json
+{
+  "displacement": {
+    "type": ["object", "null"],
+    "properties": {
+      "dx": { "type": "number" },
+      "dy": { "type": "number" },
+      "dz": { "type": "number" }
+    },
+    "description": "Hawkins displacement vector. target.sem = source.sem + displacement"
+  }
+}
+```
+
+---
+
+## Mechanism 7 — Object Compositionality
+
+### Source
+
+Hawkins describes how cortical columns learn that a complex object (cup)
+is a composition of parts (handle, rim, body), each with its own
+reference frame. The brain doesn't store "cup" as one holistic blob — it
+stores the spatial relationships between parts. Touching the handle
+alone is enough to reconstruct the whole cup.
+
+### Gap in Current Spec
+
+Glyphs have radicals (parts) placed in a 2×2 grid. But there is no
+data about how the radicals relate to each other spatially. The grid
+is a layout tool, not a relational map. You cannot reconstruct the whole
+glyph from a single radical.
+
+### Integration
+
+Enhance the composition grid with inter-radical displacement vectors
+and relation types. Every pair of radicals in a glyph has a defined
+spatial and semantic relationship.
+
+Enhanced CompositionGrid Schema:
+
+```json
+{
+  "grid": {
+    "A": "CR-54",
+    "B": "CR-16",
+    "C": "CR-32",
+    "D": "CR-08",
+    "inter_radical_relations": [
+      {
+        "from": "A", "to": "B",
+        "displacement": [0.3, 0.0, -0.1],
+        "relation": "classifier-of",
+        "strength": 0.9,
+        "description": "Error classifies Tower"
+      },
+      {
+        "from": "A", "to": "C",
+        "displacement": [0.0, -0.4, 0.0],
+        "relation": "caused-by",
+        "strength": 0.7,
+        "description": "Error caused by Memory"
+      },
+      {
+        "from": "C", "to": "D",
+        "displacement": [0.2, 0.1, 0.3],
+        "relation": "manifests-as",
+        "strength": 0.6,
+        "description": "Memory manifests as Water (leak)"
+      },
+      {
+        "from": "A", "to": "D",
+        "displacement": [0.5, -0.3, 0.2],
+        "relation": "expressed-through",
+        "strength": 0.5,
+        "description": "Error expressed through Water"
+      }
+    ]
+  }
+}
+```
+
+Reconstruction from Fragment:
+
+```
+SCENARIO: System receives only radical CR-32 (Remember) from a
+          corrupted or partial glyph transmission.
+
+STEP 1: Look up all glyphs containing CR-32 in position C
+STEP 2: For each candidate, check inter_radical_relations:
+  → CR-32(C) has relation "caused-by" to position A
+  → CR-32(C) has relation "manifests-as" to position D
+STEP 3: Use displacement vectors to predict what A and D should be
+STEP 4: Match predictions against known radicals
+  → A predicted at offset (0.0, +0.4, 0.0) from CR-32 → CR-54 (Error)
+  → D predicted at offset (0.2, 0.1, 0.3)  from CR-32 → CR-08 (Water)
+STEP 5: Reconstruct full glyph from single fragment
+
+RESULT: "Error-Tower-Remember-Water" = server memory leak crash
+        Entire glyph reconstructed from ONE radical + its relations.
+```
+
+Relation Types:
+
+| Relation           | Meaning               | Typical Grid Pair |
+|--------------------|-----------------------|-------------------|
+| classifier-of      | A categorizes B       | A → B             |
+| caused-by          | A was caused by C     | A → C             |
+| manifests-as       | C appears as D        | C → D             |
+| expressed-through  | A shows via D         | A → D             |
+| modifies           | B adjusts C           | B → C             |
+| elaborates         | D extends B           | D → B             |
+
+Why This Matters:
+
+1. Fault tolerance — partial glyph transmissions can be fully
+   reconstructed from any surviving radical
+2. Semantic search — find any radical, navigate its relations to
+   discover the full concept
+3. Compression — transmit only one radical + relation table instead
+   of full glyph (for bandwidth-constrained mesh links)
+4. Learning — understanding HOW parts relate is deeper knowledge
+   than just knowing WHAT parts exist
+
+---
+
 ## Related documents
 
 - [03 — RQ^R2 Encoder Module](03-rqr2-module.md)
