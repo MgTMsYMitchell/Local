@@ -8,10 +8,9 @@ void FractalMesh::add_node(std::unique_ptr<MeshNode> node) {
     std::lock_guard<std::mutex> lk(mtx_);
     std::string id = node->id();
 
-    // Register routes to all existing nodes (direct, 1-hop)
+    // Register routes to all existing nodes (add_route creates bidirectional edges)
     for (auto& [existing_id, _] : nodes_) {
         routing_.add_route(id, existing_id);
-        routing_.add_route(existing_id, id);
     }
 
     nodes_[id] = std::move(node);

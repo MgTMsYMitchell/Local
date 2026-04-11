@@ -10,6 +10,7 @@
 #include <thread>
 
 #include <nlohmann/json.hpp>
+#include <sqlite3.h>
 
 namespace qfs {
 
@@ -166,9 +167,16 @@ void Application::seed_nodes(int count) {
         node->set_alignment(align);
         node->compress_state(compressor_);
 
-        // Persist to DB
-        db_->execute(
-            "INSERT OR IGNORE INTO nodes (id, status) VALUES ('" + id + "', 'active');");
+        // Persist to DB using parameterized query
+        {
+            sqlite3_stmt* stmt = nullptr;
+            sqlite3_prepare_v2(db_->raw(),
+                "INSERT OR IGNORE INTO nodes (id, status) VALUES (?, 'active');",
+                -1, &stmt, nullptr);
+            sqlite3_bind_text(stmt, 1, id.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_step(stmt);
+            sqlite3_finalize(stmt);
+        }
 
         mesh_.add_node(std::move(node));
     }
