@@ -411,20 +411,22 @@ CREATE INDEX IF NOT EXISTS idx_theories_status ON theories(status);
 CREATE INDEX IF NOT EXISTS idx_theories_trust  ON theories(trust_score);
 
 -- tendrils: mycelium connections between symbols (RQ^R2 §14)
+-- NOTE: column is 'diameter' (Physarum tube model, M8). For existing databases
+--       that still have 'weight', the try_alter block below renames it.
 CREATE TABLE IF NOT EXISTS tendrils (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     source_symbol  INTEGER NOT NULL,
     target_symbol  INTEGER NOT NULL,
-    weight         REAL    NOT NULL DEFAULT 0.5,
+    diameter       REAL    NOT NULL DEFAULT 0.5,  -- M8: replaces weight; flow∝(d/2)²
     traffic_count  INTEGER DEFAULT 0,
     last_traversed TEXT,
     created_at     TEXT    DEFAULT (datetime('now')),
     tendril_type   TEXT    NOT NULL DEFAULT 'association'
         -- association|causal|compositional|antithetical|dream_bridge|slip_link
 );
-CREATE INDEX IF NOT EXISTS idx_tendrils_source ON tendrils(source_symbol);
-CREATE INDEX IF NOT EXISTS idx_tendrils_target ON tendrils(target_symbol);
-CREATE INDEX IF NOT EXISTS idx_tendrils_weight ON tendrils(weight);
+CREATE INDEX IF NOT EXISTS idx_tendrils_source   ON tendrils(source_symbol);
+CREATE INDEX IF NOT EXISTS idx_tendrils_target   ON tendrils(target_symbol);
+CREATE INDEX IF NOT EXISTS idx_tendrils_diameter ON tendrils(diameter);
 
 -- ── Mechanism 9 (Physarum Anticipation): rhythm detection table ──────────────
 CREATE TABLE IF NOT EXISTS rhythms (
@@ -552,6 +554,47 @@ CREATE INDEX IF NOT EXISTS idx_verbpocket_phase  ON verb_pockets(temporal_phase)
     try_alter("ALTER TABLE symbols ADD COLUMN accessed_at    TEXT");
     try_alter("ALTER TABLE symbols ADD COLUMN access_count   INTEGER DEFAULT 0");
     try_alter("ALTER TABLE symbols ADD COLUMN decay_score    REAL    DEFAULT 1.0");
+
+    // ── Mechanism 1 (Ink-Drop Enfoldment): depth layer per symbol ─────────────
+    try_alter("ALTER TABLE symbols ADD COLUMN enfoldment_depth INTEGER DEFAULT 0");
+
+    // ── Mechanism 4 (Superimplicate Order): meta-glyph axiom layer ────────────
+    try_alter("ALTER TABLE symbols ADD COLUMN is_superimplicate INTEGER DEFAULT 0");
+    try_alter("ALTER TABLE symbols ADD COLUMN governs_process   TEXT");
+
+    // ── Mechanism 6 (Displacement Cells): Hawkins displacement vectors ─────────
+    try_alter("ALTER TABLE tendrils ADD COLUMN displacement_x REAL");
+    try_alter("ALTER TABLE tendrils ADD COLUMN displacement_y REAL");
+    try_alter("ALTER TABLE tendrils ADD COLUMN displacement_z REAL");
+
+    // ── Mechanism 8 (Tube-Diameter Memory): rename weight → diameter ──────────
+    // On existing databases whose tendrils table has the old 'weight' column,
+    // rename it.  On fresh databases the column is already named 'diameter'.
+    // try_alter ignores errors silently (duplicate column / no such column).
+    try_alter("ALTER TABLE tendrils RENAME COLUMN weight TO diameter");
+
+    // ── Mechanism 10 (Habituation): Physarum habituation lifecycle ────────────
+    try_alter("ALTER TABLE symbols ADD COLUMN habituation_count     INTEGER DEFAULT 0");
+    try_alter("ALTER TABLE symbols ADD COLUMN habituation_threshold INTEGER DEFAULT 50");
+    try_alter("ALTER TABLE symbols ADD COLUMN habituated_at         INTEGER");
+
+    // ── Mechanism 12 (Fluid Analogies / Slipnet): analogical slip-links ───────
+    try_alter("ALTER TABLE tendrils ADD COLUMN slip_mapping  TEXT");
+    try_alter("ALTER TABLE tendrils ADD COLUMN slip_strength REAL");
+
+    // ── Mechanism 16 (Shadow Pockets): ARAS shadow + paradox layer ───────────
+    try_alter("ALTER TABLE symbols ADD COLUMN is_shadow       INTEGER DEFAULT 0");
+    try_alter("ALTER TABLE symbols ADD COLUMN shadow_of       TEXT");
+    try_alter("ALTER TABLE symbols ADD COLUMN shadow_id       TEXT");
+    try_alter("ALTER TABLE symbols ADD COLUMN is_paradox      INTEGER DEFAULT 0");
+    try_alter("ALTER TABLE symbols ADD COLUMN paradox_primary TEXT");
+    try_alter("ALTER TABLE symbols ADD COLUMN paradox_shadow  TEXT");
+
+    // ── Mechanism 17 (Kami Threshold Emergence): Shinto emergence score ───────
+    try_alter("ALTER TABLE symbols ADD COLUMN kami_score      REAL    DEFAULT 0.0");
+    try_alter("ALTER TABLE symbols ADD COLUMN is_kami         INTEGER DEFAULT 0");
+    try_alter("ALTER TABLE symbols ADD COLUMN kami_emerged_at INTEGER");
+    try_alter("ALTER TABLE symbols ADD COLUMN kami_faded_at   INTEGER");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2000,12 +2043,15 @@ int BrainDb::insert_tendril(const nlohmann::json& doc)
     std::lock_guard<std::mutex> lk(mtx_);
     sqlite3_stmt* stmt = nullptr;
     sqlite3_prepare_v2(db_,
-        "INSERT INTO tendrils (source_symbol,target_symbol,weight,tendril_type)"
+        "INSERT INTO tendrils (source_symbol,target_symbol,diameter,tendril_type)"
         " VALUES (?,?,?,?);",
         -1, &stmt, nullptr);
     sqlite3_bind_int   (stmt, 1, doc.value("source_symbol", 0));
     sqlite3_bind_int   (stmt, 2, doc.value("target_symbol", 0));
-    sqlite3_bind_double(stmt, 3, doc.value("weight", 0.5));
+    // Accept both 'diameter' (new) and 'weight' (legacy API key)
+    double d = doc.contains("diameter") ? doc["diameter"].get<double>()
+                                        : doc.value("weight", 0.5);
+    sqlite3_bind_double(stmt, 3, d);
     sqlite3_bind_text  (stmt, 4, doc.value("tendril_type","association").c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_step(stmt);
     sqlite3_finalize(stmt);
@@ -2017,12 +2063,12 @@ nlohmann::json BrainDb::tendrils_query(int source, int target,
 {
     std::lock_guard<std::mutex> lk(mtx_);
     std::string sql =
-        "SELECT id,source_symbol,target_symbol,weight,traffic_count,"
+        "SELECT id,source_symbol,target_symbol,diameter,traffic_count,"
         "last_traversed,tendril_type,created_at FROM tendrils WHERE 1=1";
     if (source > 0)           sql += " AND source_symbol=?1";
     if (target > 0)           sql += " AND target_symbol=?2";
     if (!tendril_type.empty()) sql += " AND tendril_type=?3";
-    sql += " ORDER BY weight DESC LIMIT ?4;";
+    sql += " ORDER BY diameter DESC LIMIT ?4;";
     sqlite3_stmt* stmt = nullptr;
     sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
     if (source > 0)           sqlite3_bind_int (stmt, 1, source);
@@ -2035,11 +2081,16 @@ nlohmann::json BrainDb::tendrils_query(int source, int target,
             const unsigned char* p = sqlite3_column_text(stmt, c);
             return p ? reinterpret_cast<const char*>(p) : "";
         };
+        double d = sqlite3_column_double(stmt, 3);
+        // flow_capacity = π * (d/2)²
+        constexpr double kPi = 3.14159265358979323846;
+        double flow = kPi * (d / 2.0) * (d / 2.0);
         arr.push_back({
             {"id",              sqlite3_column_int   (stmt, 0)},
             {"source_symbol",   sqlite3_column_int   (stmt, 1)},
             {"target_symbol",   sqlite3_column_int   (stmt, 2)},
-            {"weight",          sqlite3_column_double(stmt, 3)},
+            {"diameter",        d},
+            {"flow_capacity",   flow},
             {"traffic_count",   sqlite3_column_int   (stmt, 4)},
             {"last_traversed",  txt(5)},
             {"tendril_type",    txt(6)},
@@ -2092,18 +2143,28 @@ nlohmann::json BrainDb::radicals_query(int tier, const std::string& domain)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BrainDb — RQ^R2 Consolidation cycle ("sleep")
+// BrainDb — RQ^R2 Consolidation cycle ("sleep") — 8-stage enhanced pipeline
+// Stages: N1, N3, Kin Nourishment, Anticipation, REM Creative,
+//         Typogenetic Evaluation, Kami Evaluation, Pruning
 // ─────────────────────────────────────────────────────────────────────────────
 
 nlohmann::json BrainDb::consolidation_tick()
 {
-    // Counts for the report
-    int dreams_scanned = 0, candidates_flagged = 0;
-    int promoted_to_theory = 0, merged = 0, rejected = 0;
-    int dreams_expired = 0, symbols_decayed = 0, tendrils_pruned = 0;
-    nlohmann::json new_theory_ids = nlohmann::json::array();
+    using json = nlohmann::json;
 
-    // ── STAGE 1 — Light Sleep: find promotion candidates ─────────────────────
+    // ── Stage counters ────────────────────────────────────────────────────────
+    int dreams_scanned = 0,   candidates_flagged = 0,  soma_feedbacks = 0;
+    int promoted_to_theory = 0, merged = 0, rejected = 0;
+    int enfoldment_assignments = 0;
+    int kin_nourishments = 0,  kin_defenses = 0,       kin_vouches = 0;
+    int rhythms_updated = 0,   phantoms_logged = 0;
+    int slip_links_discovered = 0, shadows_generated = 0, paradoxes_emerged = 0;
+    int kami_emerged = 0,      kami_faded = 0,          kami_stable = 0;
+    int habituations = 0,      dishabituations = 0;
+    int dreams_expired = 0,    symbols_decayed = 0,     tendrils_pruned = 0;
+    json new_theory_ids = json::array();
+
+    // ── STAGE 1 — Light Sleep (N1): scan dreams ───────────────────────────────
     {
         std::lock_guard<std::mutex> lk(mtx_);
         sqlite3_stmt* cnt = nullptr;
@@ -2112,8 +2173,23 @@ nlohmann::json BrainDb::consolidation_tick()
         if (sqlite3_step(cnt) == SQLITE_ROW) dreams_scanned = sqlite3_column_int(cnt, 0);
         sqlite3_finalize(cnt);
     }
-    // Candidates: high confidence OR recurring
-    nlohmann::json candidates = nlohmann::json::array();
+
+    // Soma-Significance (M3): scanning activates dreams
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        sqlite3_stmt* s = nullptr;
+        sqlite3_prepare_v2(db_,
+            "UPDATE dreams SET consolidation_count = consolidation_count + 1"
+            " WHERE rejected_at IS NULL AND promoted_to IS NULL"
+            "   AND (confidence >= 0.6 OR consolidation_count >= 2);",
+            -1, &s, nullptr);
+        sqlite3_step(s);
+        soma_feedbacks = sqlite3_changes(db_);
+        sqlite3_finalize(s);
+    }
+
+    // Gather candidates
+    json candidates = json::array();
     {
         std::lock_guard<std::mutex> lk(mtx_);
         sqlite3_stmt* stmt = nullptr;
@@ -2146,13 +2222,16 @@ nlohmann::json BrainDb::consolidation_tick()
         candidates_flagged = static_cast<int>(candidates.size());
     }
 
-    // ── STAGE 2 — Deep Sleep: promote candidates to theories ─────────────────
+    // ── STAGE 2 — Deep Sleep (N3): promote dreams to theories ────────────────
     for (const auto& cand : candidates) {
         int dream_id = cand["id"].get<int>();
         double conf  = cand["confidence"].get<double>();
         std::string hyp = "Theory from dream: " + cand.value("raw_input", "");
 
-        nlohmann::json theory = {
+        // M1: assign enfoldment depth based on confidence tier
+        int enfold_depth = (conf >= 0.75) ? 5 : 9;  // theory=4-7, dream=8-11
+
+        json theory = {
             {"dream_origin",          dream_id},
             {"sem_x",                 cand.value("sem_x", 0.0)},
             {"sem_y",                 cand.value("sem_y", 0.0)},
@@ -2160,16 +2239,16 @@ nlohmann::json BrainDb::consolidation_tick()
             {"fractal_depth",         1},
             {"compression_q",         0.5},
             {"hypothesis",            hyp},
-            {"trust_score",           conf * 0.8},  // start slightly below dream confidence
-            {"supporting_evidence",   nlohmann::json::array()},
-            {"contradicting_evidence",nlohmann::json::array()},
+            {"trust_score",           conf * 0.8},
+            {"supporting_evidence",   json::array()},
+            {"contradicting_evidence",json::array()},
             {"status",                "active"}
         };
-        int tid = insert_theory(theory);  // NOTE: calls raw insert, no extra lock needed
+        int tid = insert_theory(theory);
         new_theory_ids.push_back(tid);
         promoted_to_theory++;
 
-        // Mark dream as promoted
+        // Mark dream as promoted + set enfoldment depth on any promoted symbol
         {
             std::lock_guard<std::mutex> lk(mtx_);
             sqlite3_stmt* upd = nullptr;
@@ -2181,10 +2260,20 @@ nlohmann::json BrainDb::consolidation_tick()
             sqlite3_bind_int(upd, 2, dream_id);
             sqlite3_step(upd);
             sqlite3_finalize(upd);
+
+            sqlite3_stmt* ef = nullptr;
+            sqlite3_prepare_v2(db_,
+                "UPDATE symbols SET enfoldment_depth=? WHERE dream_source=?;",
+                -1, &ef, nullptr);
+            sqlite3_bind_int(ef, 1, enfold_depth);
+            sqlite3_bind_int(ef, 2, dream_id);
+            sqlite3_step(ef);
+            if (sqlite3_changes(db_) > 0) enfoldment_assignments++;
+            sqlite3_finalize(ef);
         }
     }
 
-    // ── STAGE 3 — Check theories ready for trusted promotion ─────────────────
+    // Promote ready theories to symbols
     {
         std::lock_guard<std::mutex> lk(mtx_);
         sqlite3_stmt* stmt = nullptr;
@@ -2198,29 +2287,25 @@ nlohmann::json BrainDb::consolidation_tick()
             " LIMIT 10;",
             -1, &stmt, nullptr);
         while (sqlite3_step(stmt) == SQLITE_ROW) {
-            auto txt = [&](int c) -> std::string {
-                const unsigned char* p = sqlite3_column_text(stmt, c);
-                return p ? reinterpret_cast<const char*>(p) : "";
-            };
             int tid = sqlite3_column_int(stmt, 0);
-            nlohmann::json sym = {
-                {"sem_x",        sqlite3_column_double(stmt, 2)},
-                {"sem_y",        sqlite3_column_double(stmt, 3)},
-                {"sem_z",        sqlite3_column_double(stmt, 4)},
-                {"trust_state",  "trusted"},
-                {"trust_score",  sqlite3_column_double(stmt, 6)},
-                {"dream_source", sqlite3_column_int(stmt, 1)},
-                {"fractal_depth",1},
-                {"compression_q","0.8"},
-                {"decay_score",  1.0}
+            json sym = {
+                {"sem_x",           sqlite3_column_double(stmt, 2)},
+                {"sem_y",           sqlite3_column_double(stmt, 3)},
+                {"sem_z",           sqlite3_column_double(stmt, 4)},
+                {"trust_state",     "trusted"},
+                {"trust_score",     sqlite3_column_double(stmt, 6)},
+                {"dream_source",    sqlite3_column_int(stmt, 1)},
+                {"fractal_depth",   1},
+                {"compression_q",   "0.8"},
+                {"decay_score",     1.0},
+                {"enfoldment_depth",3}  // trusted → shallow enfoldment
             };
-            // promote to symbols (finalize inner stmt before re-entrant insert)
             sqlite3_finalize(stmt);
             stmt = nullptr;
 
-            int sym_id = insert_symbol(sym);  // acquires its own lock
+            int sym_id = insert_symbol(sym);
+            (void)sym_id;
 
-            // Mark theory as promoted
             {
                 sqlite3_stmt* upd = nullptr;
                 sqlite3_prepare_v2(db_,
@@ -2231,16 +2316,424 @@ nlohmann::json BrainDb::consolidation_tick()
                 sqlite3_step(upd);
                 sqlite3_finalize(upd);
             }
-            (void)sym_id;
-            break;  // restart from the outer loop since we re-opened stmt
+            break;
         }
         if (stmt) sqlite3_finalize(stmt);
     }
 
-    // ── STAGE 4 — Pruning: expire dreams past TTL, decay symbols ─────────────
+    // ── STAGE 3 — Kin Nourishment (M14) ──────────────────────────────────────
     {
         std::lock_guard<std::mutex> lk(mtx_);
-        // Expire dreams past TTL
+        // Transfer 5% trust from parent to child (capped at parent trust).
+        // Uses a correlated UPDATE via kin_relations.
+        sqlite3_stmt* nour = nullptr;
+        sqlite3_prepare_v2(db_,
+            "UPDATE symbols SET trust_score = MIN("
+            "  trust_score + COALESCE(("
+            "    SELECT p.trust_score * 0.05"
+            "    FROM symbols p INNER JOIN kin_relations k"
+            "      ON k.symbol_a = CAST(p.id AS TEXT)"
+            "    WHERE k.symbol_b = CAST(symbols.id AS TEXT)"
+            "      AND k.relationship = 'child'"
+            "      AND p.trust_state IN ('trusted','axiom')"
+            "      AND p.trust_score > symbols.trust_score"
+            "    LIMIT 1), 0),"
+            "  COALESCE(("
+            "    SELECT p2.trust_score FROM symbols p2"
+            "    INNER JOIN kin_relations k2 ON k2.symbol_a = CAST(p2.id AS TEXT)"
+            "    WHERE k2.symbol_b = CAST(symbols.id AS TEXT)"
+            "      AND k2.relationship = 'child' LIMIT 1), 1.0))"
+            " WHERE trust_state NOT IN ('axiom')"
+            "   AND EXISTS ("
+            "     SELECT 1 FROM kin_relations k"
+            "     WHERE k.symbol_b = CAST(symbols.id AS TEXT)"
+            "       AND k.relationship = 'child');",
+            -1, &nour, nullptr);
+        sqlite3_step(nour);
+        kin_nourishments = sqlite3_changes(db_);
+        sqlite3_finalize(nour);
+
+        // Kin defense: vouches for endangered symbols (trust < 0.2)
+        sqlite3_stmt* def = nullptr;
+        sqlite3_prepare_v2(db_,
+            "SELECT id FROM symbols"
+            " WHERE trust_score < 0.2 AND trust_state NOT IN ('axiom') LIMIT 20;",
+            -1, &def, nullptr);
+        std::vector<int> endangered;
+        while (sqlite3_step(def) == SQLITE_ROW)
+            endangered.push_back(sqlite3_column_int(def, 0));
+        sqlite3_finalize(def);
+
+        for (int eid : endangered) {
+            int vouches = 0;
+            sqlite3_stmt* vouch = nullptr;
+            sqlite3_prepare_v2(db_,
+                "SELECT s.id FROM symbols s"
+                " INNER JOIN kin_relations k ON k.symbol_a = CAST(s.id AS TEXT)"
+                " WHERE k.symbol_b = CAST(?1 AS TEXT)"
+                "   AND k.distance <= 2 AND s.trust_score >= 0.7 LIMIT 3;",
+                -1, &vouch, nullptr);
+            sqlite3_bind_int(vouch, 1, eid);
+            while (sqlite3_step(vouch) == SQLITE_ROW && vouches < 3) {
+                sqlite3_stmt* upd = nullptr;
+                sqlite3_prepare_v2(db_,
+                    "UPDATE symbols SET trust_score = MIN(trust_score + 0.05, 1.0)"
+                    " WHERE id=?;", -1, &upd, nullptr);
+                sqlite3_bind_int(upd, 1, eid);
+                sqlite3_step(upd);
+                sqlite3_finalize(upd);
+                vouches++;
+                kin_vouches++;
+            }
+            sqlite3_finalize(vouch);
+            if (vouches > 0) kin_defenses++;
+        }
+    }
+
+    // ── STAGE 4 — Anticipation (M9): rhythm maintenance ──────────────────────
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+
+        sqlite3_stmt* stmt = nullptr;
+        sqlite3_prepare_v2(db_,
+            "SELECT id, next_predicted, hit_count, miss_count FROM rhythms"
+            " WHERE status='active' AND next_predicted IS NOT NULL;",
+            -1, &stmt, nullptr);
+        struct RhythmRow { std::string id; int64_t next; int hits, misses; };
+        std::vector<RhythmRow> rrows;
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            auto txt = [&](int c) -> std::string {
+                const unsigned char* p = sqlite3_column_text(stmt, c);
+                return p ? reinterpret_cast<const char*>(p) : "";
+            };
+            rrows.push_back({txt(0),
+                             (int64_t)sqlite3_column_int64(stmt, 1),
+                             sqlite3_column_int(stmt, 2),
+                             sqlite3_column_int(stmt, 3)});
+        }
+        sqlite3_finalize(stmt);
+
+        for (const auto& r : rrows) {
+            bool in_window = std::abs(now_ms - r.next) < 5000LL;
+            bool overdue   = (now_ms > r.next + 5000LL);
+            if (in_window) {
+                rhythms_updated++;
+            } else if (overdue) {
+                sqlite3_stmt* upd = nullptr;
+                sqlite3_prepare_v2(db_,
+                    "UPDATE rhythms SET miss_count = miss_count + 1 WHERE id=?;",
+                    -1, &upd, nullptr);
+                sqlite3_bind_text(upd, 1, r.id.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_step(upd);
+                sqlite3_finalize(upd);
+                phantoms_logged++;
+
+                if (r.misses + 1 > r.hits) {
+                    sqlite3_stmt* dea = nullptr;
+                    sqlite3_prepare_v2(db_,
+                        "UPDATE rhythms SET status='dormant' WHERE id=?;",
+                        -1, &dea, nullptr);
+                    sqlite3_bind_text(dea, 1, r.id.c_str(), -1, SQLITE_TRANSIENT);
+                    sqlite3_step(dea);
+                    sqlite3_finalize(dea);
+                }
+            }
+        }
+    }
+
+    // ── STAGE 5 — REM Creative (M12 slip-links, M16 shadows) ─────────────────
+    // 5b: Discover cross-domain structural analogies → slip-link tendrils
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        sqlite3_stmt* stmt = nullptr;
+        sqlite3_prepare_v2(db_,
+            "SELECT a.id, b.id,"
+            " ABS(a.sem_x-b.sem_x)+ABS(a.sem_y-b.sem_y)+ABS(a.sem_z-b.sem_z) AS dist"
+            " FROM symbols a, symbols b"
+            " WHERE a.id < b.id"
+            "   AND a.domain IS NOT NULL AND b.domain IS NOT NULL"
+            "   AND a.domain != b.domain"
+            "   AND a.trust_state IN ('trusted','axiom')"
+            "   AND b.trust_state IN ('trusted','axiom')"
+            "   AND dist < 0.3"
+            "   AND NOT EXISTS ("
+            "     SELECT 1 FROM tendrils t"
+            "     WHERE t.source_symbol=a.id AND t.target_symbol=b.id"
+            "       AND t.tendril_type='slip_link')"
+            " LIMIT 5;",
+            -1, &stmt, nullptr);
+        std::vector<std::pair<int,int>> analogy_pairs;
+        while (sqlite3_step(stmt) == SQLITE_ROW)
+            analogy_pairs.emplace_back(
+                sqlite3_column_int(stmt, 0), sqlite3_column_int(stmt, 1));
+        sqlite3_finalize(stmt);
+
+        for (auto& [aid, bid] : analogy_pairs) {
+            sqlite3_stmt* ins = nullptr;
+            sqlite3_prepare_v2(db_,
+                "INSERT INTO tendrils"
+                " (source_symbol,target_symbol,diameter,tendril_type,slip_strength)"
+                " VALUES (?,?,0.3,'slip_link',0.7);",
+                -1, &ins, nullptr);
+            sqlite3_bind_int(ins, 1, aid);
+            sqlite3_bind_int(ins, 2, bid);
+            sqlite3_step(ins);
+            sqlite3_finalize(ins);
+            slip_links_discovered++;
+        }
+    }
+
+    // 5c: Shadow generation for newly-trusted symbols without a shadow
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        sqlite3_stmt* stmt = nullptr;
+        sqlite3_prepare_v2(db_,
+            "SELECT id FROM symbols"
+            " WHERE trust_state IN ('trusted','axiom')"
+            "   AND is_shadow=0 AND is_paradox=0 AND shadow_id IS NULL LIMIT 10;",
+            -1, &stmt, nullptr);
+        std::vector<int> need_shadow;
+        while (sqlite3_step(stmt) == SQLITE_ROW)
+            need_shadow.push_back(sqlite3_column_int(stmt, 0));
+        sqlite3_finalize(stmt);
+
+        for (int pid : need_shadow) {
+            sqlite3_stmt* ins = nullptr;
+            sqlite3_prepare_v2(db_,
+                "INSERT INTO symbols"
+                " (radical,layer,sem_x,sem_y,sem_z,trust_state,trust_score,"
+                "  decay_score,is_shadow,shadow_of,enfoldment_depth)"
+                " SELECT radical||'_shadow',layer,"
+                "   -sem_x,-sem_y,-sem_z,'theory',trust_score*0.6,"
+                "   1.0,1,CAST(id AS TEXT),6"
+                " FROM symbols WHERE id=?;",
+                -1, &ins, nullptr);
+            sqlite3_bind_int(ins, 1, pid);
+            sqlite3_step(ins);
+            int sid = static_cast<int>(sqlite3_last_insert_rowid(db_));
+            sqlite3_finalize(ins);
+
+            sqlite3_stmt* upd = nullptr;
+            sqlite3_prepare_v2(db_,
+                "UPDATE symbols SET shadow_id=CAST(?1 AS TEXT) WHERE id=?2;",
+                -1, &upd, nullptr);
+            sqlite3_bind_int(upd, 1, sid);
+            sqlite3_bind_int(upd, 2, pid);
+            sqlite3_step(upd);
+            sqlite3_finalize(upd);
+            shadows_generated++;
+        }
+
+        // Paradox generation: primary + shadow both at trust >= 0.7
+        sqlite3_stmt* pq = nullptr;
+        sqlite3_prepare_v2(db_,
+            "SELECT p.id, CAST(p.shadow_id AS INTEGER)"
+            " FROM symbols p INNER JOIN symbols s ON s.id=CAST(p.shadow_id AS INTEGER)"
+            " WHERE p.trust_score>=0.7 AND s.trust_score>=0.7"
+            "   AND p.is_paradox=0 AND p.shadow_id IS NOT NULL LIMIT 5;",
+            -1, &pq, nullptr);
+        std::vector<std::pair<int,int>> ppairs;
+        while (sqlite3_step(pq) == SQLITE_ROW)
+            ppairs.emplace_back(sqlite3_column_int(pq,0), sqlite3_column_int(pq,1));
+        sqlite3_finalize(pq);
+
+        for (auto& [pid, sid] : ppairs) {
+            sqlite3_stmt* pins = nullptr;
+            sqlite3_prepare_v2(db_,
+                "INSERT INTO symbols"
+                " (radical,layer,sem_x,sem_y,sem_z,trust_state,trust_score,"
+                "  decay_score,is_paradox,paradox_primary,paradox_shadow,enfoldment_depth)"
+                " SELECT p.radical||'_paradox',p.layer,"
+                "   0.0,0.0,0.0,'theory',(p.trust_score+s.trust_score)/2.0,"
+                "   1.0,1,CAST(p.id AS TEXT),CAST(s.id AS TEXT),4"
+                " FROM symbols p,symbols s WHERE p.id=?1 AND s.id=?2;",
+                -1, &pins, nullptr);
+            sqlite3_bind_int(pins, 1, pid);
+            sqlite3_bind_int(pins, 2, sid);
+            sqlite3_step(pins);
+            sqlite3_finalize(pins);
+
+            sqlite3_stmt* mark = nullptr;
+            sqlite3_prepare_v2(db_,
+                "UPDATE symbols SET is_paradox=1 WHERE id=?;", -1, &mark, nullptr);
+            sqlite3_bind_int(mark, 1, pid);
+            sqlite3_step(mark);
+            sqlite3_finalize(mark);
+            paradoxes_emerged++;
+        }
+    }
+
+    // ── STAGE 6 — Typogenetic Evaluation (M11) ────────────────────────────────
+    // Count programs; full mutation execution deferred to LibrarianAgent.
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        sqlite3_stmt* stmt = nullptr;
+        sqlite3_prepare_v2(db_,
+            "SELECT COUNT(*) FROM symbols"
+            " WHERE trust_state IN ('theory','trusted','axiom')"
+            "   AND halo_json LIKE '%typogenetic_program%';",
+            -1, &stmt, nullptr);
+        int n = 0;
+        if (sqlite3_step(stmt) == SQLITE_ROW) n = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+        (void)n;
+    }
+
+    // ── STAGE 7 — Kami Evaluation (M17) ──────────────────────────────────────
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        sqlite3_stmt* stmt = nullptr;
+        sqlite3_prepare_v2(db_,
+            "SELECT id, trust_score, decay_score, is_kami, kami_score"
+            " FROM symbols WHERE trust_state IN ('trusted','axiom') LIMIT 200;",
+            -1, &stmt, nullptr);
+        struct KRow { int id; double trust, decay; int is_kami; double prev; };
+        std::vector<KRow> krows;
+        while (sqlite3_step(stmt) == SQLITE_ROW)
+            krows.push_back({sqlite3_column_int(stmt,0),
+                             sqlite3_column_double(stmt,1),
+                             sqlite3_column_double(stmt,2),
+                             sqlite3_column_int(stmt,3),
+                             sqlite3_column_double(stmt,4)});
+        sqlite3_finalize(stmt);
+
+        int64_t now_ts = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+
+        for (const auto& r : krows) {
+            // trust 0.40, freshness (decay proxy) 0.35, decay 0.25
+            double score = std::min(r.trust * 0.40 + r.decay * 0.60, 1.0);
+            bool emerging = (!r.is_kami && score >= 0.85);
+            bool fading   = ( r.is_kami && score <  0.80);
+
+            if (emerging || fading || std::abs(score - r.prev) > 0.01) {
+                int new_is_kami = (emerging || (r.is_kami && !fading)) ? 1 : 0;
+                sqlite3_stmt* upd = nullptr;
+                sqlite3_prepare_v2(db_,
+                    "UPDATE symbols SET kami_score=?1, is_kami=?2,"
+                    " kami_emerged_at = CASE WHEN ?3 THEN ?4 ELSE kami_emerged_at END,"
+                    " kami_faded_at   = CASE WHEN ?5 THEN ?4 ELSE kami_faded_at   END,"
+                    " decay_score     = CASE WHEN ?3 THEN 1.0 ELSE decay_score    END"
+                    " WHERE id=?6;",
+                    -1, &upd, nullptr);
+                sqlite3_bind_double(upd, 1, score);
+                sqlite3_bind_int   (upd, 2, new_is_kami);
+                sqlite3_bind_int   (upd, 3, emerging ? 1 : 0);
+                sqlite3_bind_int64 (upd, 4, now_ts);
+                sqlite3_bind_int   (upd, 5, fading ? 1 : 0);
+                sqlite3_bind_int   (upd, 6, r.id);
+                sqlite3_step(upd);
+                sqlite3_finalize(upd);
+                if (emerging) kami_emerged++;
+                else if (fading) kami_faded++;
+                else kami_stable++;
+            }
+        }
+    }
+
+    // ── STAGE 8 — Pruning, habituation, fragment distribution, compression ────
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+
+        // 8a: Habituation (M10) — mute over-accessed symbols
+        sqlite3_stmt* hab = nullptr;
+        sqlite3_prepare_v2(db_,
+            "UPDATE symbols SET habituated_at=CAST(strftime('%s','now') AS INTEGER)"
+            " WHERE habituated_at IS NULL"
+            "   AND habituation_count > habituation_threshold"
+            "   AND trust_state NOT IN ('axiom');",
+            -1, &hab, nullptr);
+        sqlite3_step(hab);
+        habituations = sqlite3_changes(db_);
+        sqlite3_finalize(hab);
+
+        // Dishabituation: reset when not accessed for 2× threshold minutes
+        sqlite3_stmt* dis = nullptr;
+        sqlite3_prepare_v2(db_,
+            "UPDATE symbols SET habituation_count=0, habituated_at=NULL"
+            " WHERE habituated_at IS NOT NULL"
+            "   AND (CAST(strftime('%s','now') AS INTEGER) - habituated_at)"
+            "       > habituation_threshold * 120;",
+            -1, &dis, nullptr);
+        sqlite3_step(dis);
+        dishabituations = sqlite3_changes(db_);
+        sqlite3_finalize(dis);
+
+        // 8b: Decay tick (kami symbols immune: is_kami=0 guard)
+        sqlite3_stmt* dec = nullptr;
+        sqlite3_prepare_v2(db_,
+            "UPDATE symbols SET decay_score = decay_score *"
+            " CASE trust_state"
+            "   WHEN 'dream'   THEN 0.90"
+            "   WHEN 'theory'  THEN 0.99"
+            "   WHEN 'trusted' THEN 0.999"
+            "   ELSE 1.0 END"
+            " WHERE trust_state != 'axiom' AND is_kami = 0;",
+            -1, &dec, nullptr);
+        sqlite3_step(dec);
+        symbols_decayed = sqlite3_changes(db_);
+        sqlite3_finalize(dec);
+
+        // 8c: Envelope cache for newly trusted symbols (M19 Stage-2 compression)
+        sqlite3_stmt* env = nullptr;
+        sqlite3_prepare_v2(db_,
+            "INSERT OR IGNORE INTO envelope_cache"
+            " (symbol_id,radicals,grid,sem_x,sem_y,sem_z,"
+            "  trust_state,domain,ac_ratio,cached_at)"
+            " SELECT CAST(id AS TEXT),'[]','{}',sem_x,sem_y,sem_z,"
+            "        trust_state,domain,COALESCE(ac_ratio,0.5),"
+            "        CAST(strftime('%s','now') AS INTEGER)"
+            " FROM symbols WHERE trust_state IN ('trusted','axiom')"
+            "   AND NOT EXISTS ("
+            "     SELECT 1 FROM envelope_cache ec"
+            "     WHERE ec.symbol_id=CAST(symbols.id AS TEXT));",
+            -1, &env, nullptr);
+        sqlite3_step(env);
+        sqlite3_finalize(env);
+
+        // 8d: Cuneiform index (M19 Stage-4 compression)
+        sqlite3_stmt* cui = nullptr;
+        sqlite3_prepare_v2(db_,
+            "INSERT OR IGNORE INTO cuneiform_index"
+            " (hash_key,symbol_id,domain_code,sem_octant,trust_tier)"
+            " SELECT"
+            "   ABS(CAST((sem_x*1000+sem_y*100+sem_z*10)*10000 AS INTEGER)),"
+            "   CAST(id AS TEXT), 0,"
+            "   CASE WHEN sem_x>=0 AND sem_y>=0 AND sem_z>=0 THEN 0"
+            "        WHEN sem_x< 0 AND sem_y>=0 AND sem_z>=0 THEN 1"
+            "        WHEN sem_x>=0 AND sem_y< 0 AND sem_z>=0 THEN 2"
+            "        WHEN sem_x< 0 AND sem_y< 0 AND sem_z>=0 THEN 3"
+            "        WHEN sem_x>=0 AND sem_y>=0 AND sem_z< 0  THEN 4"
+            "        WHEN sem_x< 0 AND sem_y>=0 AND sem_z< 0  THEN 5"
+            "        WHEN sem_x>=0 AND sem_y< 0 AND sem_z< 0  THEN 6"
+            "        ELSE 7 END,"
+            "   CASE trust_state WHEN 'dream' THEN 0 WHEN 'theory' THEN 1"
+            "     WHEN 'trusted' THEN 2 ELSE 3 END"
+            " FROM symbols WHERE trust_state IN ('trusted','axiom');",
+            -1, &cui, nullptr);
+        sqlite3_step(cui);
+        sqlite3_finalize(cui);
+
+        // 8e: Tendril atrophy (M8) — diameter *= 0.995; prune < 0.005
+        sqlite3_stmt* atr = nullptr;
+        sqlite3_prepare_v2(db_,
+            "UPDATE tendrils SET diameter=diameter*0.995"
+            " WHERE tendril_type != 'slip_link';",
+            -1, &atr, nullptr);
+        sqlite3_step(atr);
+        sqlite3_finalize(atr);
+
+        sqlite3_stmt* prune = nullptr;
+        sqlite3_prepare_v2(db_,
+            "DELETE FROM tendrils WHERE diameter < 0.005;",
+            -1, &prune, nullptr);
+        sqlite3_step(prune);
+        tendrils_pruned = sqlite3_changes(db_);
+        sqlite3_finalize(prune);
+
+        // 8f: Expire dreams past TTL
         sqlite3_stmt* exp = nullptr;
         sqlite3_prepare_v2(db_,
             "UPDATE dreams SET rejected_at=datetime('now'),"
@@ -2252,69 +2745,68 @@ nlohmann::json BrainDb::consolidation_tick()
         sqlite3_step(exp);
         dreams_expired = sqlite3_changes(db_);
         sqlite3_finalize(exp);
-
-        // Apply passive decay to symbols (not axioms)
-        // decay_score *= 0.999 per consolidation tick (very slow for trusted)
-        sqlite3_stmt* dec = nullptr;
-        sqlite3_prepare_v2(db_,
-            "UPDATE symbols SET decay_score = decay_score *"
-            " CASE trust_state"
-            "   WHEN 'dream'   THEN 0.90"
-            "   WHEN 'theory'  THEN 0.99"
-            "   WHEN 'trusted' THEN 0.999"
-            "   ELSE 1.0 END"  // axiom: no decay
-            " WHERE trust_state != 'axiom';",
-            -1, &dec, nullptr);
-        sqlite3_step(dec);
-        symbols_decayed = sqlite3_changes(db_);
-        sqlite3_finalize(dec);
-
-        // Prune tendrils with near-zero weight
-        sqlite3_stmt* prune = nullptr;
-        sqlite3_prepare_v2(db_,
-            "DELETE FROM tendrils WHERE weight < 0.01;",
-            -1, &prune, nullptr);
-        sqlite3_step(prune);
-        tendrils_pruned = sqlite3_changes(db_);
-        sqlite3_finalize(prune);
     }
 
     // ── Build health snapshot ─────────────────────────────────────────────────
-    nlohmann::json health;
+    json health;
     {
         std::lock_guard<std::mutex> lk(mtx_);
-        auto count_table = [&](const char* tbl) -> int {
+        auto cq = [&](const char* sql) -> int {
             sqlite3_stmt* s = nullptr;
-            std::string q = "SELECT COUNT(*) FROM "; q += tbl; q += ";";
-            sqlite3_prepare_v2(db_, q.c_str(), -1, &s, nullptr);
+            sqlite3_prepare_v2(db_, sql, -1, &s, nullptr);
             int n = 0;
             if (sqlite3_step(s) == SQLITE_ROW) n = sqlite3_column_int(s, 0);
             sqlite3_finalize(s);
             return n;
         };
         health = {
-            {"total_symbols",   count_table("symbols")},
-            {"total_dreams",    count_table("dreams")},
-            {"total_theories",  count_table("theories")},
-            {"total_tendrils",  count_table("tendrils")}
+            {"total_symbols",    cq("SELECT COUNT(*) FROM symbols;")},
+            {"total_dreams",     cq("SELECT COUNT(*) FROM dreams;")},
+            {"total_theories",   cq("SELECT COUNT(*) FROM theories;")},
+            {"total_tendrils",   cq("SELECT COUNT(*) FROM tendrils;")},
+            {"total_kami",       cq("SELECT COUNT(*) FROM symbols WHERE is_kami=1;")},
+            {"total_rhythms",    cq("SELECT COUNT(*) FROM rhythms;")},
+            {"total_slip_links", cq("SELECT COUNT(*) FROM tendrils WHERE tendril_type='slip_link';")},
+            {"total_shadows",    cq("SELECT COUNT(*) FROM symbols WHERE is_shadow=1;")},
+            {"total_paradoxes",  cq("SELECT COUNT(*) FROM symbols WHERE is_paradox=1;")},
+            {"total_fragments",  cq("SELECT COUNT(*) FROM fragments;")},
+            {"highway_tendrils", cq("SELECT COUNT(*) FROM tendrils WHERE diameter>0.7;")},
+            {"footpath_tendrils",cq("SELECT COUNT(*) FROM tendrils WHERE diameter<0.1;")}
         };
     }
 
     return {
         {"stages", {
-            {"n1_light_sleep",  {{"dreams_scanned",    dreams_scanned},
-                                  {"candidates_flagged", candidates_flagged}}},
-            {"n3_deep_sleep",   {{"promoted_to_theory", promoted_to_theory},
-                                  {"merged_with_existing", merged},
-                                  {"rejected", rejected},
-                                  {"new_theory_ids", new_theory_ids}}},
-            {"pruning",         {{"dreams_expired",   dreams_expired},
-                                  {"symbols_decayed",  symbols_decayed},
-                                  {"tendrils_pruned",  tendrils_pruned}}}
+            {"n1_light_sleep",         {{"dreams_scanned",        dreams_scanned},
+                                         {"candidates_flagged",    candidates_flagged},
+                                         {"soma_feedbacks",        soma_feedbacks}}},
+            {"n3_deep_sleep",          {{"promoted_to_theory",     promoted_to_theory},
+                                         {"merged_with_existing",  merged},
+                                         {"rejected",              rejected},
+                                         {"enfoldment_assignments",enfoldment_assignments},
+                                         {"new_theory_ids",        new_theory_ids}}},
+            {"kin_nourishment",        {{"nourishments_given",     kin_nourishments},
+                                         {"defenses_triggered",    kin_defenses},
+                                         {"vouches_issued",        kin_vouches}}},
+            {"anticipation",           {{"rhythms_updated",        rhythms_updated},
+                                         {"phantoms_logged",       phantoms_logged}}},
+            {"rem_creative",           {{"slip_links_discovered",  slip_links_discovered},
+                                         {"shadows_generated",     shadows_generated},
+                                         {"paradoxes_emerged",     paradoxes_emerged}}},
+            {"typogenetic_evaluation", {{"note","deferred to LibrarianAgent"}}},
+            {"kami_evaluation",        {{"kami_emerged",           kami_emerged},
+                                         {"kami_faded",            kami_faded},
+                                         {"kami_stable",           kami_stable}}},
+            {"pruning",                {{"habituations_triggered", habituations},
+                                         {"dishabituations",       dishabituations},
+                                         {"symbols_decayed",       symbols_decayed},
+                                         {"dreams_expired",        dreams_expired},
+                                         {"tendrils_pruned",       tendrils_pruned}}}
         }},
         {"health_snapshot", health}
     };
 }
+
 
 int BrainDb::store_knowledge(const std::string& radical, const std::string& layer,
                               const nlohmann::json& entry)
@@ -2364,6 +2856,496 @@ nlohmann::json BrainDb::query_knowledge(const std::string& radical, int limit)
             {"sem_y",      sqlite3_column_double(stmt, 5)},
             {"sem_z",      sqlite3_column_double(stmt, 6)},
             {"created_at", txt(7)}
+        });
+    }
+    sqlite3_finalize(stmt);
+    return arr;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BrainDb — Pocket-Galaxy Mechanism implementations (M1, M9, M14, M15, M16,
+//            M17, M18, M19, M2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── M1: Ink-Drop Enfoldment ───────────────────────────────────────────────────
+
+bool BrainDb::set_enfoldment_depth(int symbol_id, int depth)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "UPDATE symbols SET enfoldment_depth=? WHERE id=?;",
+        -1, &stmt, nullptr);
+    sqlite3_bind_int(stmt, 1, depth);
+    sqlite3_bind_int(stmt, 2, symbol_id);
+    sqlite3_step(stmt);
+    int rows = sqlite3_changes(db_);
+    sqlite3_finalize(stmt);
+    return rows > 0;
+}
+
+nlohmann::json BrainDb::symbols_by_enfoldment(int depth, int max_depth, int limit)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "SELECT id,radical,layer,sem_x,sem_y,sem_z,trust_state,trust_score,"
+        " domain,enfoldment_depth"
+        " FROM symbols"
+        " WHERE enfoldment_depth >= ?1 AND enfoldment_depth <= ?2"
+        " ORDER BY enfoldment_depth ASC, trust_score DESC LIMIT ?3;",
+        -1, &stmt, nullptr);
+    sqlite3_bind_int(stmt, 1, depth);
+    sqlite3_bind_int(stmt, 2, max_depth > 0 ? max_depth : depth);
+    sqlite3_bind_int(stmt, 3, limit);
+    auto arr = nlohmann::json::array();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        arr.push_back({
+            {"id",               sqlite3_column_int   (stmt, 0)},
+            {"radical",          txt(1)},
+            {"layer",            txt(2)},
+            {"sem_x",            sqlite3_column_double(stmt, 3)},
+            {"sem_y",            sqlite3_column_double(stmt, 4)},
+            {"sem_z",            sqlite3_column_double(stmt, 5)},
+            {"trust_state",      txt(6)},
+            {"trust_score",      sqlite3_column_double(stmt, 7)},
+            {"domain",           txt(8)},
+            {"enfoldment_depth", sqlite3_column_int   (stmt, 9)}
+        });
+    }
+    sqlite3_finalize(stmt);
+    return arr;
+}
+
+// ── M4: Superimplicate query ──────────────────────────────────────────────────
+
+nlohmann::json BrainDb::symbols_superimplicate_query(const std::string& process)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    std::string sql =
+        "SELECT id,radical,layer,sem_x,sem_y,sem_z,trust_state,trust_score,"
+        " governs_process"
+        " FROM symbols WHERE is_superimplicate=1";
+    if (!process.empty()) sql += " AND governs_process=?1";
+    sql += " ORDER BY trust_score DESC LIMIT 50;";
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
+    if (!process.empty())
+        sqlite3_bind_text(stmt, 1, process.c_str(), -1, SQLITE_TRANSIENT);
+    auto arr = nlohmann::json::array();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        arr.push_back({
+            {"id",               sqlite3_column_int   (stmt, 0)},
+            {"radical",          txt(1)},
+            {"layer",            txt(2)},
+            {"sem_x",            sqlite3_column_double(stmt, 3)},
+            {"sem_y",            sqlite3_column_double(stmt, 4)},
+            {"sem_z",            sqlite3_column_double(stmt, 5)},
+            {"trust_state",      txt(6)},
+            {"trust_score",      sqlite3_column_double(stmt, 7)},
+            {"governs_process",  txt(8)}
+        });
+    }
+    sqlite3_finalize(stmt);
+    return arr;
+}
+
+// ── M9: Rhythms (Anticipatory Behavior) ──────────────────────────────────────
+
+int BrainDb::insert_rhythm(const nlohmann::json& doc)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    std::string rads = doc.value("radicals", nlohmann::json::array()).dump();
+    int64_t now_ts = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "INSERT INTO rhythms"
+        " (id,domain,radicals,period_ms,confidence,status,created_at)"
+        " VALUES (?,?,?,?,?,?,?);",
+        -1, &stmt, nullptr);
+    std::string rid = doc.value("id", utc_now());  // caller should provide UUID
+    sqlite3_bind_text  (stmt, 1, rid.c_str(),                                    -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 2, doc.value("domain", "").c_str(),                -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 3, rads.c_str(),                                   -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int   (stmt, 4, doc.value("period_ms", 60000));
+    sqlite3_bind_double(stmt, 5, doc.value("confidence", 0.0));
+    sqlite3_bind_text  (stmt, 6, doc.value("status", "active").c_str(),          -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64 (stmt, 7, now_ts);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return static_cast<int>(sqlite3_last_insert_rowid(db_));
+}
+
+nlohmann::json BrainDb::rhythms_query(const std::string& status, int limit)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    std::string sql =
+        "SELECT id,domain,radicals,period_ms,confidence,last_occurrence,"
+        "next_predicted,hit_count,miss_count,status,created_at"
+        " FROM rhythms WHERE 1=1";
+    if (!status.empty()) sql += " AND status=?1";
+    sql += " ORDER BY confidence DESC LIMIT ?2;";
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
+    if (!status.empty()) sqlite3_bind_text(stmt, 1, status.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 2, limit);
+    auto arr = nlohmann::json::array();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        nlohmann::json rads = nlohmann::json::array();
+        try { rads = nlohmann::json::parse(txt(2)); } catch (...) {}
+        arr.push_back({
+            {"id",              txt(0)},
+            {"domain",          txt(1)},
+            {"radicals",        rads},
+            {"period_ms",       sqlite3_column_int   (stmt, 3)},
+            {"confidence",      sqlite3_column_double(stmt, 4)},
+            {"last_occurrence", sqlite3_column_type(stmt,5)==SQLITE_NULL
+                                    ? nlohmann::json(nullptr)
+                                    : nlohmann::json(sqlite3_column_int64(stmt,5))},
+            {"next_predicted",  sqlite3_column_type(stmt,6)==SQLITE_NULL
+                                    ? nlohmann::json(nullptr)
+                                    : nlohmann::json(sqlite3_column_int64(stmt,6))},
+            {"hit_count",       sqlite3_column_int   (stmt, 7)},
+            {"miss_count",      sqlite3_column_int   (stmt, 8)},
+            {"status",          txt(9)},
+            {"created_at",      sqlite3_column_int64 (stmt, 10)}
+        });
+    }
+    sqlite3_finalize(stmt);
+    return arr;
+}
+
+// ── M14: Kin Relations ────────────────────────────────────────────────────────
+
+bool BrainDb::insert_kin_relation(const nlohmann::json& doc)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "INSERT OR REPLACE INTO kin_relations"
+        " (symbol_a,symbol_b,relationship,distance,affinity)"
+        " VALUES (?,?,?,?,?);",
+        -1, &stmt, nullptr);
+    sqlite3_bind_text  (stmt, 1, doc.value("symbol_a",     "").c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 2, doc.value("symbol_b",     "").c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 3, doc.value("relationship", "").c_str(), -1, SQLITE_TRANSIENT);
+    int dist = doc.value("distance", 1);
+    sqlite3_bind_int   (stmt, 4, dist);
+    sqlite3_bind_double(stmt, 5, doc.contains("affinity") ? doc["affinity"].get<double>()
+                                                          : 1.0 / (dist + 1));
+    sqlite3_step(stmt);
+    int rows = sqlite3_changes(db_);
+    sqlite3_finalize(stmt);
+    return rows > 0;
+}
+
+nlohmann::json BrainDb::kin_query(const std::string& symbol_id, int max_distance)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "SELECT symbol_a,symbol_b,relationship,distance,affinity FROM kin_relations"
+        " WHERE (symbol_a=?1 OR symbol_b=?1) AND distance<=?2"
+        " ORDER BY affinity DESC LIMIT 100;",
+        -1, &stmt, nullptr);
+    sqlite3_bind_text(stmt, 1, symbol_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int (stmt, 2, max_distance);
+    auto arr = nlohmann::json::array();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        arr.push_back({
+            {"symbol_a",     txt(0)},
+            {"symbol_b",     txt(1)},
+            {"relationship", txt(2)},
+            {"distance",     sqlite3_column_int   (stmt, 3)},
+            {"affinity",     sqlite3_column_double(stmt, 4)}
+        });
+    }
+    sqlite3_finalize(stmt);
+    return arr;
+}
+
+// ── M15: Remediation Log ──────────────────────────────────────────────────────
+
+int BrainDb::log_remediation(const nlohmann::json& doc)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    int64_t now_ts = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    std::string details = doc.value("corruption_details", nlohmann::json::array()).dump();
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "INSERT INTO remediation_log"
+        " (id,timestamp,corruption_type,source_node,original_size_bytes,"
+        "  radicals_salvaged,radicals_discarded,reassembled,new_dream_id,"
+        "  corruption_details)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?);",
+        -1, &stmt, nullptr);
+    std::string rid = doc.value("id", utc_now());
+    sqlite3_bind_text (stmt,  1, rid.c_str(),                                    -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt,  2, doc.contains("timestamp") ? doc["timestamp"].get<int64_t>() : now_ts);
+    sqlite3_bind_text (stmt,  3, doc.value("corruption_type","malformed").c_str(),-1, SQLITE_TRANSIENT);
+    if (doc.contains("source_node") && !doc["source_node"].is_null())
+        sqlite3_bind_text (stmt,4, doc["source_node"].get<std::string>().c_str(),-1, SQLITE_TRANSIENT);
+    else sqlite3_bind_null(stmt, 4);
+    if (doc.contains("original_size_bytes") && !doc["original_size_bytes"].is_null())
+        sqlite3_bind_int(stmt, 5, doc["original_size_bytes"].get<int>());
+    else sqlite3_bind_null(stmt, 5);
+    sqlite3_bind_int  (stmt,  6, doc.value("radicals_salvaged",  0));
+    sqlite3_bind_int  (stmt,  7, doc.value("radicals_discarded", 0));
+    sqlite3_bind_int  (stmt,  8, doc.value("reassembled", false) ? 1 : 0);
+    if (doc.contains("new_dream_id") && !doc["new_dream_id"].is_null())
+        sqlite3_bind_text(stmt,9, doc["new_dream_id"].get<std::string>().c_str(),-1, SQLITE_TRANSIENT);
+    else sqlite3_bind_null(stmt, 9);
+    sqlite3_bind_text (stmt, 10, details.c_str(),                                -1, SQLITE_TRANSIENT);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return static_cast<int>(sqlite3_last_insert_rowid(db_));
+}
+
+nlohmann::json BrainDb::remediation_log_query(int64_t since_ts, int limit)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "SELECT id,timestamp,corruption_type,source_node,original_size_bytes,"
+        "radicals_salvaged,radicals_discarded,reassembled,new_dream_id,"
+        "corruption_details"
+        " FROM remediation_log"
+        " WHERE timestamp >= ?1"
+        " ORDER BY timestamp DESC LIMIT ?2;",
+        -1, &stmt, nullptr);
+    sqlite3_bind_int64(stmt, 1, since_ts);
+    sqlite3_bind_int  (stmt, 2, limit);
+    auto arr = nlohmann::json::array();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        nlohmann::json det = nlohmann::json::array();
+        try { det = nlohmann::json::parse(txt(9)); } catch (...) {}
+        arr.push_back({
+            {"id",                  txt(0)},
+            {"timestamp",           sqlite3_column_int64(stmt, 1)},
+            {"corruption_type",     txt(2)},
+            {"source_node",         sqlite3_column_type(stmt,3)==SQLITE_NULL
+                                        ? nlohmann::json(nullptr) : nlohmann::json(txt(3))},
+            {"original_size_bytes", sqlite3_column_type(stmt,4)==SQLITE_NULL
+                                        ? nlohmann::json(nullptr) : nlohmann::json(sqlite3_column_int(stmt,4))},
+            {"radicals_salvaged",   sqlite3_column_int(stmt, 5)},
+            {"radicals_discarded",  sqlite3_column_int(stmt, 6)},
+            {"reassembled",         sqlite3_column_int(stmt, 7) != 0},
+            {"new_dream_id",        sqlite3_column_type(stmt,8)==SQLITE_NULL
+                                        ? nlohmann::json(nullptr) : nlohmann::json(txt(8))},
+            {"corruption_details",  det}
+        });
+    }
+    sqlite3_finalize(stmt);
+    return arr;
+}
+
+// ── M17: Kami score query ─────────────────────────────────────────────────────
+
+double BrainDb::compute_kami_score(int symbol_id)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "SELECT trust_score, decay_score FROM symbols WHERE id=?;",
+        -1, &stmt, nullptr);
+    sqlite3_bind_int(stmt, 1, symbol_id);
+    double score = 0.0;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        double trust = sqlite3_column_double(stmt, 0);
+        double decay = sqlite3_column_double(stmt, 1);
+        score = std::min(trust * 0.40 + decay * 0.60, 1.0);
+    }
+    sqlite3_finalize(stmt);
+    return score;
+}
+
+nlohmann::json BrainDb::get_kami_symbols(int limit)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "SELECT id,radical,layer,sem_x,sem_y,sem_z,trust_state,trust_score,"
+        " kami_score,kami_emerged_at"
+        " FROM symbols WHERE is_kami=1"
+        " ORDER BY kami_score DESC LIMIT ?;",
+        -1, &stmt, nullptr);
+    sqlite3_bind_int(stmt, 1, limit);
+    auto arr = nlohmann::json::array();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        arr.push_back({
+            {"id",             sqlite3_column_int   (stmt, 0)},
+            {"radical",        txt(1)},
+            {"layer",          txt(2)},
+            {"sem_x",          sqlite3_column_double(stmt, 3)},
+            {"sem_y",          sqlite3_column_double(stmt, 4)},
+            {"sem_z",          sqlite3_column_double(stmt, 5)},
+            {"trust_state",    txt(6)},
+            {"trust_score",    sqlite3_column_double(stmt, 7)},
+            {"kami_score",     sqlite3_column_double(stmt, 8)},
+            {"kami_emerged_at",sqlite3_column_type(stmt,9)==SQLITE_NULL
+                                   ? nlohmann::json(nullptr)
+                                   : nlohmann::json(sqlite3_column_int64(stmt,9))}
+        });
+    }
+    sqlite3_finalize(stmt);
+    return arr;
+}
+
+// ── M18: Holographic Fragments ────────────────────────────────────────────────
+
+int BrainDb::insert_fragment(const nlohmann::json& doc)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    int64_t now_ts = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "INSERT INTO fragments"
+        " (id,origin_symbol_id,origin_pocket_id,sem_x,sem_y,sem_z,"
+        "  domain,radical_hash,ac_ratio_q,fragment_fidelity,created_at)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?);",
+        -1, &stmt, nullptr);
+    sqlite3_bind_text  (stmt,  1, doc.value("id", utc_now()).c_str(),              -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt,  2, doc.value("origin_symbol_id",  "").c_str(),      -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt,  3, doc.value("origin_pocket_id",  "").c_str(),      -1, SQLITE_TRANSIENT);
+    sqlite3_bind_double(stmt,  4, doc.value("sem_x",  0.0));
+    sqlite3_bind_double(stmt,  5, doc.value("sem_y",  0.0));
+    sqlite3_bind_double(stmt,  6, doc.value("sem_z",  0.0));
+    if (doc.contains("domain") && !doc["domain"].is_null())
+        sqlite3_bind_text(stmt, 7, doc["domain"].get<std::string>().c_str(),       -1, SQLITE_TRANSIENT);
+    else sqlite3_bind_null(stmt, 7);
+    sqlite3_bind_int   (stmt,  8, doc.value("radical_hash",       0));
+    sqlite3_bind_double(stmt,  9, doc.value("ac_ratio_q",         0.5));
+    sqlite3_bind_double(stmt, 10, doc.value("fragment_fidelity",  0.5));
+    sqlite3_bind_int64 (stmt, 11, doc.contains("created_at") ? doc["created_at"].get<int64_t>() : now_ts);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return static_cast<int>(sqlite3_last_insert_rowid(db_));
+}
+
+nlohmann::json BrainDb::fragments_query(const std::string& symbol_id, int limit)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "SELECT id,origin_symbol_id,origin_pocket_id,sem_x,sem_y,sem_z,"
+        "domain,radical_hash,ac_ratio_q,fragment_fidelity,created_at,verified"
+        " FROM fragments WHERE origin_symbol_id=?1"
+        " ORDER BY fragment_fidelity DESC LIMIT ?2;",
+        -1, &stmt, nullptr);
+    sqlite3_bind_text(stmt, 1, symbol_id.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int (stmt, 2, limit);
+    auto arr = nlohmann::json::array();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        arr.push_back({
+            {"id",                txt(0)},
+            {"origin_symbol_id",  txt(1)},
+            {"origin_pocket_id",  txt(2)},
+            {"sem_x",             sqlite3_column_double(stmt, 3)},
+            {"sem_y",             sqlite3_column_double(stmt, 4)},
+            {"sem_z",             sqlite3_column_double(stmt, 5)},
+            {"domain",            sqlite3_column_type(stmt,6)==SQLITE_NULL
+                                      ? nlohmann::json(nullptr) : nlohmann::json(txt(6))},
+            {"radical_hash",      sqlite3_column_int   (stmt, 7)},
+            {"ac_ratio_q",        sqlite3_column_double(stmt, 8)},
+            {"fragment_fidelity", sqlite3_column_double(stmt, 9)},
+            {"created_at",        sqlite3_column_int64 (stmt, 10)},
+            {"verified",          sqlite3_column_int   (stmt, 11) != 0}
+        });
+    }
+    sqlite3_finalize(stmt);
+    return arr;
+}
+
+// ── M2: Verb Pockets ──────────────────────────────────────────────────────────
+
+int BrainDb::insert_verb_pocket(const nlohmann::json& doc)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    int64_t now_ts = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    std::string parts = doc.value("participants", nlohmann::json::array()).dump();
+    std::string steps = doc.value("steps",        nlohmann::json::array()).dump();
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "INSERT INTO verb_pockets"
+        " (id,participants,steps,status,temporal_phase,trust_state,created_at)"
+        " VALUES (?,?,?,?,?,?,?);",
+        -1, &stmt, nullptr);
+    sqlite3_bind_text  (stmt, 1, doc.value("id", utc_now()).c_str(),              -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 2, parts.c_str(),                                   -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 3, steps.c_str(),                                   -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 4, doc.value("status",      "active").c_str(),      -1, SQLITE_TRANSIENT);
+    sqlite3_bind_double(stmt, 5, doc.value("temporal_phase", 0.0));
+    sqlite3_bind_text  (stmt, 6, doc.value("trust_state",  "dream").c_str(),      -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64 (stmt, 7, now_ts);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return static_cast<int>(sqlite3_last_insert_rowid(db_));
+}
+
+nlohmann::json BrainDb::verb_pockets_query(const std::string& status, int limit)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    std::string sql =
+        "SELECT id,participants,steps,status,temporal_phase,trust_state,"
+        "last_active,created_at FROM verb_pockets WHERE 1=1";
+    if (!status.empty()) sql += " AND status=?1";
+    sql += " ORDER BY created_at DESC LIMIT ?2;";
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
+    if (!status.empty()) sqlite3_bind_text(stmt, 1, status.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 2, limit);
+    auto arr = nlohmann::json::array();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        nlohmann::json parts = nlohmann::json::array(), steps = nlohmann::json::array();
+        try { parts = nlohmann::json::parse(txt(1)); } catch (...) {}
+        try { steps = nlohmann::json::parse(txt(2)); } catch (...) {}
+        arr.push_back({
+            {"id",             txt(0)},
+            {"participants",   parts},
+            {"steps",          steps},
+            {"status",         txt(3)},
+            {"temporal_phase", sqlite3_column_double(stmt, 4)},
+            {"trust_state",    txt(5)},
+            {"last_active",    sqlite3_column_type(stmt,6)==SQLITE_NULL
+                                   ? nlohmann::json(nullptr)
+                                   : nlohmann::json(sqlite3_column_int64(stmt,6))},
+            {"created_at",     sqlite3_column_int64(stmt, 7)}
         });
     }
     sqlite3_finalize(stmt);

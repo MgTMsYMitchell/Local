@@ -466,6 +466,195 @@ static void setup_brain_routes(httplib::Server& srv,
         res.set_content(db.radicals_query(tier, domain).dump(2), "application/json");
     });
 
+    // ── RQ^R2 Pocket-Galaxy REST routes (Mechanisms 1–19) ────────────────────
+
+    // M1: Enfoldment
+    srv.Put("/rqr2/symbols/:id/enfold", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            int symbol_id = std::stoi(req.path_params.at("id"));
+            auto body = json::parse(req.body);
+            int depth = body.value("depth", 0);
+            bool ok = db.set_enfoldment_depth(symbol_id, depth);
+            res.status = ok ? 200 : 404;
+            res.set_content(json({{"ok", ok}}).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+    srv.Get("/rqr2/symbols/:id/enfold", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            int depth     = 0, max_depth = 12, limit = 50;
+            if (req.has_param("depth"))     try { depth     = std::stoi(req.get_param_value("depth"));     } catch (...) {}
+            if (req.has_param("max_depth")) try { max_depth = std::stoi(req.get_param_value("max_depth")); } catch (...) {}
+            if (req.has_param("limit"))     try { limit     = std::stoi(req.get_param_value("limit"));     } catch (...) {}
+            res.set_content(db.symbols_by_enfoldment(depth, max_depth, limit).dump(2), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+
+    // M2: Verb-Pockets
+    srv.Post("/rqr2/verb-pockets", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            int id = db.insert_verb_pocket(body);
+            res.status = 201;
+            res.set_content(json({{"id", id}}).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+    srv.Get("/rqr2/verb-pockets", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        std::string status;
+        int limit = 50;
+        if (req.has_param("status")) status = req.get_param_value("status");
+        if (req.has_param("limit"))  try { limit = std::stoi(req.get_param_value("limit")); } catch (...) {}
+        res.set_content(db.verb_pockets_query(status, limit).dump(2), "application/json");
+    });
+
+    // M4: Superimplicate
+    srv.Get("/rqr2/superimplicate", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        std::string process;
+        if (req.has_param("process")) process = req.get_param_value("process");
+        res.set_content(db.symbols_superimplicate_query(process).dump(2), "application/json");
+    });
+
+    // M9: Rhythms
+    srv.Post("/rqr2/rhythms", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            int id = db.insert_rhythm(body);
+            res.status = 201;
+            res.set_content(json({{"id", id}}).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+    srv.Get("/rqr2/rhythms", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        std::string status;
+        int limit = 50;
+        if (req.has_param("status")) status = req.get_param_value("status");
+        if (req.has_param("limit"))  try { limit = std::stoi(req.get_param_value("limit")); } catch (...) {}
+        res.set_content(db.rhythms_query(status, limit).dump(2), "application/json");
+    });
+
+    // M12: Slip-links (create via tendril with tendril_type=slip_link)
+    srv.Post("/rqr2/slip-links", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            body["tendril_type"] = "slip_link";
+            int id = db.insert_tendril(body);
+            res.status = 201;
+            res.set_content(json({{"id", id}}).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+    srv.Get("/rqr2/slip-links", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        int source = 0, target = 0, limit = 50;
+        if (req.has_param("source")) try { source = std::stoi(req.get_param_value("source")); } catch (...) {}
+        if (req.has_param("target")) try { target = std::stoi(req.get_param_value("target")); } catch (...) {}
+        if (req.has_param("limit"))  try { limit  = std::stoi(req.get_param_value("limit"));  } catch (...) {}
+        res.set_content(db.tendrils_query(source, target, "slip_link", limit).dump(2), "application/json");
+    });
+
+    // M14: Kin Relations
+    srv.Post("/rqr2/kin", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            bool ok = db.insert_kin_relation(body);
+            res.status = ok ? 201 : 400;
+            res.set_content(json({{"ok", ok}}).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+    srv.Get("/rqr2/kin/:symbol_id", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        std::string sid = req.path_params.at("symbol_id");
+        int max_dist = 3;
+        if (req.has_param("max_distance")) try { max_dist = std::stoi(req.get_param_value("max_distance")); } catch (...) {}
+        res.set_content(db.kin_query(sid, max_dist).dump(2), "application/json");
+    });
+
+    // M15: Remediation log
+    srv.Post("/rqr2/remediation-log", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            int id = db.log_remediation(body);
+            res.status = 201;
+            res.set_content(json({{"id", id}}).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+    srv.Get("/rqr2/remediation-log", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        int64_t since = 0;
+        int limit = 50;
+        if (req.has_param("since")) try { since = std::stoll(req.get_param_value("since")); } catch (...) {}
+        if (req.has_param("limit")) try { limit = std::stoi(req.get_param_value("limit"));  } catch (...) {}
+        res.set_content(db.remediation_log_query(since, limit).dump(2), "application/json");
+    });
+
+    // M17: Kami
+    srv.Get("/rqr2/kami", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        int limit = 50;
+        if (req.has_param("limit")) try { limit = std::stoi(req.get_param_value("limit")); } catch (...) {}
+        res.set_content(db.get_kami_symbols(limit).dump(2), "application/json");
+    });
+    srv.Get("/rqr2/kami/score/:id", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            int symbol_id = std::stoi(req.path_params.at("id"));
+            double score = db.compute_kami_score(symbol_id);
+            res.set_content(json({{"symbol_id", symbol_id}, {"kami_score", score}}).dump(2), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+
+    // M18: Holographic fragments
+    srv.Post("/rqr2/fragments", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            int id = db.insert_fragment(body);
+            res.status = 201;
+            res.set_content(json({{"id", id}}).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+    srv.Get("/rqr2/fragments/:symbol_id", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        std::string sid = req.path_params.at("symbol_id");
+        int limit = 50;
+        if (req.has_param("limit")) try { limit = std::stoi(req.get_param_value("limit")); } catch (...) {}
+        res.set_content(db.fragments_query(sid, limit).dump(2), "application/json");
+    });
+
     // GET /health — same as /brain/health
     srv.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
         auto c = db.all_counts();

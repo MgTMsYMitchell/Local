@@ -235,7 +235,7 @@ public:
     // ── RQ^R2 Radicals registry ───────────────────────────────────────────────
     nlohmann::json radicals_query(int tier = 0, const std::string& domain = "");
 
-    // ── RQ^R2 Consolidation cycle ─────────────────────────────────────────────
+    // ── RQ^R2 Consolidation cycle (8-stage enhanced) ──────────────────────────
     nlohmann::json consolidation_tick();
 
     // ── Knowledge substrate ────────────────────────────────────────────────────
@@ -247,6 +247,39 @@ public:
     int  save_checkpoint(const std::string& agent_name,
                           const nlohmann::json& state);
     nlohmann::json load_checkpoint(const std::string& agent_name, int checkpoint_id);
+
+    // ── Pocket-Galaxy Mechanisms (M1, M2, M4, M9, M14, M15, M17, M18) ────────
+
+    // M1: Ink-Drop Enfoldment
+    bool           set_enfoldment_depth(int symbol_id, int depth);
+    nlohmann::json symbols_by_enfoldment(int depth, int max_depth = 0, int limit = 50);
+
+    // M2: Verb-Pockets
+    int            insert_verb_pocket(const nlohmann::json& doc);
+    nlohmann::json verb_pockets_query(const std::string& status = "", int limit = 50);
+
+    // M4: Superimplicate Order
+    nlohmann::json symbols_superimplicate_query(const std::string& process = "");
+
+    // M9: Anticipatory Behavior (Rhythms)
+    int            insert_rhythm(const nlohmann::json& doc);
+    nlohmann::json rhythms_query(const std::string& status = "", int limit = 50);
+
+    // M14: Kin Recognition
+    bool           insert_kin_relation(const nlohmann::json& doc);
+    nlohmann::json kin_query(const std::string& symbol_id, int max_distance = 3);
+
+    // M15: Mycoremediation
+    int            log_remediation(const nlohmann::json& doc);
+    nlohmann::json remediation_log_query(int64_t since_ts = 0, int limit = 50);
+
+    // M17: Kami Threshold Emergence
+    double         compute_kami_score(int symbol_id);
+    nlohmann::json get_kami_symbols(int limit = 50);
+
+    // M18: Holographic Fragments
+    int            insert_fragment(const nlohmann::json& doc);
+    nlohmann::json fragments_query(const std::string& symbol_id, int limit = 50);
 
 private:
     sqlite3*           db_  = nullptr;

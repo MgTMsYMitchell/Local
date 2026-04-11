@@ -2491,6 +2491,160 @@ rather than total recall for every access.
 
 ---
 
+---
+
+## Enhanced 8-Stage Consolidation Cycle
+
+The original 4-stage consolidation cycle (N1, N3, REM, Pruning) expands
+to **8 stages** with Mechanisms 1–19 integrated.
+
+```
+STAGE 1 — LIGHT SLEEP (N1)
+  Scan dream buffer for promotion candidates.
+  NEW (M3 Soma-Significance): each scanned dream gets activation += 0.3.
+
+STAGE 2 — DEEP SLEEP (N3)
+  Promote candidates to theories.
+  NEW (M1 Enfoldment): assign depth 8–11 to dream promotions, 4–7 to theories.
+  NEW (M7 Compositionality): compute inter-radical relations.
+  NEW (M18 Fragments): cross-reference holographic fragments.
+
+STAGE 3 — KIN NOURISHMENT (M14)
+  parent.trust transfers 5% to child symbols (capped at parent trust).
+  Kin defense: up to 3 vouches for endangered symbols (trust < 0.2).
+
+STAGE 4 — ANTICIPATION (M9)
+  4a: Detect rhythms in query log (autocorrelation, confidence > 0.7).
+  4b: Pre-warm pockets + symbols approaching next_predicted window.
+  4c: Phantom evaluation — missing expected events generate dreams.
+
+STAGE 5 — REM CREATIVE (original + M12, M16)
+  5a: Dream recombination (original bind-rune fusion).
+  5b: Structural analogy detection → slip-link tendrils (M12).
+  5c: Shadow generation for newly trusted symbols (M16).
+       Paradox symbol when primary + shadow both reach trust >= 0.7.
+
+STAGE 6 — TYPOGENETIC EVALUATION (M11)
+  For each symbol with typogenetic_program.enabled = true:
+    Evaluate conditions, fire mutations (max generation 5).
+    SAFETY: position A immutable, trust >= theory required.
+
+STAGE 7 — KAMI EVALUATION (M17)
+  Compute kami_score per trusted/axiom symbol.
+  Emergence: score >= 0.85 → freeze decay, amplify tendrils, emit event.
+  Fading: score < 0.80 → gradual reversal over 10 cycles.
+
+STAGE 8 — PRUNING & FRAGMENT DISTRIBUTION
+  8a: Habituation check (M10) — mute over-accessed, reset dishabituated.
+  8b: Decay tick — exponential by trust tier.
+  8c: Fragment distribution to neighbor pockets (M18).
+  8d: Compression cache update — envelope + cuneiform (M19).
+  8e: Tendril atrophy — diameter *= 0.995; prune < 0.005 (M8).
+  8f: Dream expiry, symbol pruning, radical recycling.
+  8g: Health snapshot.
+```
+
+---
+
+## Consolidated SQL Migration (Mechanisms 1–19)
+
+```sql
+-- ============================================================
+-- RQ^R2 POCKET-GALAXY INTEGRATION — CONSOLIDATED MIGRATION
+-- Version: 1.0.0
+-- ============================================================
+BEGIN TRANSACTION;
+
+-- Mechanism 1: Ink-Drop Enfoldment
+ALTER TABLE symbols ADD COLUMN enfoldment_depth INTEGER DEFAULT 0;
+CREATE INDEX idx_symbols_enfoldment ON symbols(enfoldment_depth);
+
+-- Mechanism 4: Superimplicate Order
+ALTER TABLE symbols ADD COLUMN is_superimplicate BOOLEAN DEFAULT FALSE;
+ALTER TABLE symbols ADD COLUMN governs_process TEXT;
+CREATE INDEX idx_symbols_superimplicate ON symbols(is_superimplicate)
+  WHERE is_superimplicate = TRUE;
+
+-- Mechanism 6: Displacement Cells
+ALTER TABLE tendrils ADD COLUMN displacement_x REAL;
+ALTER TABLE tendrils ADD COLUMN displacement_y REAL;
+ALTER TABLE tendrils ADD COLUMN displacement_z REAL;
+
+-- Mechanism 8: Tube-Diameter Memory (rename weight → diameter)
+ALTER TABLE tendrils RENAME COLUMN weight TO diameter;
+
+-- Mechanism 10: Habituation
+ALTER TABLE symbols ADD COLUMN habituation_count     INTEGER DEFAULT 0;
+ALTER TABLE symbols ADD COLUMN habituation_threshold INTEGER DEFAULT 50;
+ALTER TABLE symbols ADD COLUMN habituated_at         INTEGER;
+
+-- Mechanism 12: Fluid Analogies / Slipnet
+ALTER TABLE tendrils ADD COLUMN slip_mapping  TEXT;
+ALTER TABLE tendrils ADD COLUMN slip_strength REAL;
+
+-- Mechanism 16: Shadow Pockets
+ALTER TABLE symbols ADD COLUMN is_shadow       BOOLEAN DEFAULT FALSE;
+ALTER TABLE symbols ADD COLUMN shadow_of       TEXT;
+ALTER TABLE symbols ADD COLUMN shadow_id       TEXT;
+ALTER TABLE symbols ADD COLUMN is_paradox      BOOLEAN DEFAULT FALSE;
+ALTER TABLE symbols ADD COLUMN paradox_primary TEXT;
+ALTER TABLE symbols ADD COLUMN paradox_shadow  TEXT;
+CREATE INDEX idx_symbols_shadow    ON symbols(is_shadow)  WHERE is_shadow = TRUE;
+CREATE INDEX idx_symbols_shadow_of ON symbols(shadow_of)  WHERE shadow_of IS NOT NULL;
+CREATE INDEX idx_symbols_paradox   ON symbols(is_paradox) WHERE is_paradox = TRUE;
+
+-- Mechanism 17: Kami Threshold Emergence
+ALTER TABLE symbols ADD COLUMN kami_score      REAL    DEFAULT 0.0;
+ALTER TABLE symbols ADD COLUMN is_kami         BOOLEAN DEFAULT FALSE;
+ALTER TABLE symbols ADD COLUMN kami_emerged_at INTEGER;
+ALTER TABLE symbols ADD COLUMN kami_faded_at   INTEGER;
+CREATE INDEX idx_symbols_kami ON symbols(is_kami) WHERE is_kami = TRUE;
+
+-- New tables: rhythms, kin_relations, remediation_log,
+--             fragments, envelope_cache, cuneiform_index
+-- (see brain_system.cpp ensure_schema for full CREATE TABLE statements)
+
+COMMIT;
+```
+
+---
+
+## Integration Wiring Summary
+
+| # | Mechanism | Modifies | New Tables | Consol. Stage |
+|---|---|---|---|---|
+| 1 | Ink-Drop Enfoldment | symbols | — | N3 |
+| 2 | Rheomode / Verb-Pockets | pocket model | verb_pockets | — |
+| 3 | Soma-Significance | ILE pipeline | — | N1 |
+| 4 | Superimplicate Order | symbols | — | Kami eval |
+| 5 | Pilot Wave | mesh routing | — | — |
+| 6 | Displacement Cells | tendrils | — | — |
+| 7 | Object Compositionality | grid schema | — | N3 |
+| 8 | Tube-Diameter | tendrils | — | Pruning |
+| 9 | Anticipatory Behavior | query pipeline | rhythms | Anticipation |
+| 10 | Habituation | symbols, AEL | — | Pruning |
+| 11 | Typogenetics | symbols | — | Typogenetic |
+| 12 | Fluid Analogies | tendrils | — | REM |
+| 13 | Morphic Resonance | mesh discovery | — | — |
+| 14 | Kin Recognition | routing, trust | kin_relations | Kin nourish |
+| 15 | Mycoremediation | error handling | remediation_log | — |
+| 16 | Shadow Pockets | symbols | — | REM |
+| 17 | Kami Threshold | symbols, mesh | — | Kami eval |
+| 18 | Holographic Fragments | fault tolerance | fragments | N3, Pruning |
+| 19 | Token-to-Tablet | compression | envelope_cache, cuneiform_index | Pruning |
+
+**Totals:**
+- Columns added to `symbols`: 15
+- Columns added to `tendrils`: 6 (+ rename `weight` → `diameter`)
+- New tables: 6 (`rhythms`, `kin_relations`, `remediation_log`, `fragments`, `envelope_cache`, `cuneiform_index`, `verb_pockets`)
+- New indexes: 18
+- New C ABI functions: 34
+- New REST endpoints: 30+
+- New mesh message types: 5 (`PILOT_SIGNAL`, `RESONANCE_DIGEST`, `RESONANCE_PING`, `KAMI_EMERGENCE`, `KAMI_FADING`)
+- Consolidation stages: 4 → 8
+
+---
+
 ## Related documents
 
 - [03 — RQ^R2 Encoder Module](03-rqr2-module.md)
