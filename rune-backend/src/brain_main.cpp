@@ -383,7 +383,7 @@ static void setup_brain_routes(httplib::Server& srv,
             int id = db.enqueue_event("api", event_type, payload);
 
             // Also broadcast immediately on the EventBus so SSE clients see it
-            bus.post(BrainEvent{"api", event_type, payload, ""});
+            bus.post(BrainEvent{"api", event_type, payload, utc_now()});
 
             res.status = 201;
             res.set_content(json({{"id", id}, {"status", "queued"}}).dump(2), "application/json");

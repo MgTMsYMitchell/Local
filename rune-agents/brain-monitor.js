@@ -41,8 +41,8 @@ function connect() {
           const raw = buffer.slice(0, idx);
           buffer = buffer.slice(idx + 2);
 
-          // Skip keepalive comments
-          if (raw.startsWith(':')) continue;
+          // Skip keepalive comments (lines starting with ':')
+          if (raw.trimStart().startsWith(':')) continue;
 
           // Parse SSE fields
           let eventType = '';
