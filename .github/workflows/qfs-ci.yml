@@ -1,0 +1,42 @@
+name: QFS — Build & Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'QuantumFractalSystem/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'QuantumFractalSystem/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build-qfs:
+    name: QFS Build (Ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ libsqlite3-dev
+
+      - name: Configure CMake
+        working-directory: QuantumFractalSystem
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        working-directory: QuantumFractalSystem
+        run: cmake --build build --parallel
+
+      - name: Verify executable
+        working-directory: QuantumFractalSystem
+        run: test -f build/QuantumFractalSystem && echo "✓ QuantumFractalSystem built"
+
+      - name: Run tests
+        working-directory: QuantumFractalSystem/build
+        run: ctest --output-on-failure

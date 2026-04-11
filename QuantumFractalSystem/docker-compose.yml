@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  qfs:
+    build:
+      context: ..
+      dockerfile: QuantumFractalSystem/Dockerfile
+    container_name: quantum-fractal-system
+    volumes:
+      - qfs-data:/app/QuantumFractalSystem/data
+    restart: unless-stopped
+
+volumes:
+  qfs-data:

@@ -1,0 +1,26 @@
+{
+    "database": {
+        "path": "qfs.db",
+        "wal_mode": true,
+        "cache_size_mb": 40
+    },
+    "network": {
+        "listen_port": 9090,
+        "max_peers": 64,
+        "heartbeat_interval_ms": 5000
+    },
+    "compute": {
+        "thread_pool_size": 4,
+        "use_gpu": false,
+        "simd_enabled": true
+    },
+    "healing": {
+        "check_interval_ms": 10000,
+        "corruption_threshold": 0.3,
+        "repair_rate": 0.05
+    },
+    "compression": {
+        "basis_size": 32,
+        "amplitude_precision": 6
+    }
+}
