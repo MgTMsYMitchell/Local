@@ -41,8 +41,13 @@ Keypair generate()
     Keypair kp;
     auto seed = random_seed();
 
-    // Monocypher 3.1.3 ed25519 API
-    crypto_ed25519_seed_keypair(kp.public_key.data(), kp.secret_key.data(), seed.data());
+    // Monocypher 3.1.3: derive public key from 32-byte seed
+    crypto_ed25519_public_key(kp.public_key.data(), seed.data());
+
+    // Store secret_key as seed (32) || public_key (32)
+    std::copy(seed.begin(), seed.end(), kp.secret_key.begin());
+    std::copy(kp.public_key.begin(), kp.public_key.end(),
+              kp.secret_key.begin() + 32);
 
     crypto_wipe(seed.data(), seed.size());
     return kp;
