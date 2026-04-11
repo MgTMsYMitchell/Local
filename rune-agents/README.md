@@ -1,6 +1,6 @@
-# rune-agents — Chat · Node Monitor · Wallet
+# rune-agents — Chat · Node Monitor · Brain Monitor · Wallet
 
-Three Node.js CLI agents for the Rune System.  
+Four Node.js CLI agents for the Rune System.  
 No npm dependencies — uses Node.js built-ins only (`crypto`, `http`, `readline`, `fs`).
 
 ## Requirements
@@ -41,6 +41,20 @@ set NODE_ALERT_AFTER=5
 node node-agent.js
 ```
 
+### Brain monitor agent
+
+Connects to the `rune_brain` SSE event stream and prints events in real time.
+Automatically reconnects on disconnect.
+
+```powershell
+node brain-monitor.js
+
+# Custom brain host/port
+set RUNE_BRAIN_HOST=127.0.0.1
+set RUNE_BRAIN_PORT=7071
+node brain-monitor.js
+```
+
 ### Wallet agent
 
 Ed25519 keypair management backed by `wallet.json`.
@@ -65,4 +79,7 @@ Commands: `pubkey` `sign <message>` `verify <message> <sig>` `regen` `exit`
 | `RUNE_LLM_MODEL` | `local-model` | chat |
 | `NODE_POLL_INTERVAL` | `10000` | node |
 | `NODE_ALERT_AFTER` | `3` | node |
+| `RUNE_BRAIN_HOST` | `127.0.0.1` | brain-monitor |
+| `RUNE_BRAIN_PORT` | `7071` | brain-monitor |
+| `RUNE_SSE_PATH` | `/events` | brain-monitor |
 | `WALLET_PATH` | `./wallet.json` | wallet |
