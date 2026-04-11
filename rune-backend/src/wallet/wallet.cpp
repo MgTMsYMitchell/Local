@@ -1,13 +1,19 @@
-// Updates made with minimal edits
+// Original wallet implementation
 
 #include <monocypher.h>
 
-void Keypair::generate(const std::array<uint8_t, 32>& seed) {
-    // Updated crypto function usage
-    crypto_ed25519_key_pair_seed(kp.secret_key.data(), kp.public_key.data(), seed.data());
-}
+class Wallet {
+public:
+    // ... other members ...
+    void generate_keypair(const std::vector<uint8_t>& seed) {
+        crypto_ed25519_seed_keypair(kp.public_key.data(), kp.secret_key.data(), seed.data());
+    }
 
-void sign(const Keypair& kp, std::span<const uint8_t> message) {
-    // Updated sign function usage
-    crypto_ed25519_sign(sig.data(), kp.secret_key.data(), kp.public_key.data(), message.data(), message.size());
-}
+    void sign_message(const std::vector<uint8_t>& message, std::vector<uint8_t>& sig) {
+        crypto_ed25519_sign(sig.data(), kp.secret_key.data(), kp.public_key.data(), message.data(), message.size());
+    }
+
+    bool verify_signature(const std::vector<uint8_t>& signature, const std::vector<uint8_t>& public_key, const std::vector<uint8_t>& message) {
+        return crypto_ed25519_check(signature.data(), public_key.data(), message.data(), message.size()) == 0;
+    }
+};
