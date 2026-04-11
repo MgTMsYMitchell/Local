@@ -2108,8 +2108,7 @@ nlohmann::json BrainDb::consolidation_tick()
                 {"compression_q","0.8"},
                 {"decay_score",  1.0}
             };
-            // promote to symbols (release lock around insert to avoid re-entrancy)
-            sqlite3_reset(stmt);  // don't hold inner stmt open during outer insert
+            // promote to symbols (finalize inner stmt before re-entrant insert)
             sqlite3_finalize(stmt);
             stmt = nullptr;
 
