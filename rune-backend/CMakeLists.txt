@@ -10,29 +10,35 @@ include(FetchContent)
 # ── Threads (system) ──────────────────────────────────────────────────────────
 find_package(Threads REQUIRED)
 
-# ── SQLite3 amalgamation ──────────────────────────────────────────────────────
-FetchContent_Declare(
-    sqlite3_src
-    GIT_REPOSITORY https://github.com/sqlite/sqlite.git
-    GIT_TAG        version-3.45.2
-    GIT_SHALLOW    TRUE
-)
-FetchContent_GetProperties(sqlite3_src)
-if(NOT sqlite3_src_POPULATED)
-    FetchContent_Populate(sqlite3_src)
-endif()
+# ── SQLite3 (prefer system package, fallback to amalgamation) ─────────────────
+find_package(SQLite3 QUIET)
 
-add_library(sqlite3 STATIC
-    ${sqlite3_src_SOURCE_DIR}/sqlite3.c
-)
-target_include_directories(sqlite3 PUBLIC
-    ${sqlite3_src_SOURCE_DIR}
-)
-target_compile_options(sqlite3 PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:/W0>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-w>
-)
-set_target_properties(sqlite3 PROPERTIES LANGUAGE C)
+if(SQLite3_FOUND)
+    message(STATUS "Using system SQLite3: ${SQLite3_VERSION}")
+    set(RUNE_SQLITE_TARGET SQLite::SQLite3)
+else()
+    message(STATUS "SQLite3 not found on system; fetching amalgamation")
+
+    FetchContent_Declare(
+        sqlite_amalgamation
+        URL https://www.sqlite.org/2024/sqlite-amalgamation-3450200.zip
+    )
+    FetchContent_MakeAvailable(sqlite_amalgamation)
+
+    add_library(sqlite3 STATIC
+        ${sqlite_amalgamation_SOURCE_DIR}/sqlite3.c
+    )
+    target_include_directories(sqlite3 PUBLIC
+        ${sqlite_amalgamation_SOURCE_DIR}
+    )
+    target_compile_options(sqlite3 PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W0>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-w>
+    )
+    set_target_properties(sqlite3 PROPERTIES LANGUAGE C)
+
+    set(RUNE_SQLITE_TARGET sqlite3)
+endif()
 
 # ── Monocypher 3.1.3 — Ed25519 (SHA-512) signing ─────────────────────────────
 FetchContent_Declare(
@@ -87,7 +93,7 @@ add_executable(rune
 
 target_link_libraries(rune PRIVATE
     Threads::Threads
-    sqlite3
+    ${RUNE_SQLITE_TARGET}
     monocypher
     httplib::httplib
     nlohmann_json::nlohmann_json
@@ -110,7 +116,7 @@ add_executable(rune_brain
 
 target_link_libraries(rune_brain PRIVATE
     Threads::Threads
-    sqlite3
+    ${RUNE_SQLITE_TARGET}
     httplib::httplib
     nlohmann_json::nlohmann_json
 )
