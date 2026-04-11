@@ -290,7 +290,64 @@ static void setup_brain_routes(httplib::Server& srv,
         srv.stop();
     });
 
-    // ── Root-level convenience aliases ───────────────────────────────────────
+    // GET /brain/agents — list all registered agents with status
+    srv.Get("/brain/agents", [&](const httplib::Request&, httplib::Response& res) {
+        cors(res);
+        res.set_content(db.all_agents().dump(2), "application/json");
+    });
+
+    // GET /brain/symbols — query 14D symbol store
+    srv.Get("/brain/symbols", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        std::string radical = req.has_param("radical") ? req.get_param_value("radical") : "";
+        std::string layer   = req.has_param("layer")   ? req.get_param_value("layer")   : "";
+        int limit = 50;
+        if (req.has_param("limit")) try { limit = std::stoi(req.get_param_value("limit")); } catch (...) {}
+        res.set_content(db.symbols_query(radical, layer, limit).dump(2), "application/json");
+    });
+
+    // POST /brain/symbols — store a 14D symbol
+    srv.Post("/brain/symbols", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            int id = db.insert_symbol(body);
+            res.status = 201;
+            res.set_content(json({{"id", id}}).dump(2), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+
+    // POST /brain/classify — enqueue a classify_symbol event
+    srv.Post("/brain/classify", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        try {
+            auto body = json::parse(req.body);
+            int id = db.enqueue_event("api", "classify_symbol", body);
+            bus.post(BrainEvent{"api", "classify_symbol", body, utc_now()});
+            res.status = 201;
+            res.set_content(json({{"id", id}, {"status", "queued"}}).dump(2), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 400;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+
+    // GET /brain/knowledge — query memory substrate by radical
+    srv.Get("/brain/knowledge", [&](const httplib::Request& req, httplib::Response& res) {
+        cors(res);
+        std::string radical = req.has_param("radical") ? req.get_param_value("radical") : "";
+        int limit = 20;
+        if (req.has_param("limit")) try { limit = std::stoi(req.get_param_value("limit")); } catch (...) {}
+        if (radical.empty()) {
+            res.status = 400;
+            res.set_content(json({{"error","radical param required"}}).dump(), "application/json");
+            return;
+        }
+        res.set_content(db.query_knowledge(radical, limit).dump(2), "application/json");
+    });
 
     // GET /health — same as /brain/health
     srv.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
@@ -423,6 +480,13 @@ int main(int argc, char* argv[])
     TorrentAgent      torrent("TorrentAgent", "torrent", db, bus, shutdown);
     EdgeAgent         edge   ("EdgeAgent",    "edge",    db, bus, shutdown);
 
+    HousekeepingAgent housekeeping("Housekeeping",  "housekeeping", db, bus, shutdown);
+    StrategyAgent     strategy    ("StrategyAgent", "strategy",     db, bus, shutdown);
+    EpicRuneAgent     epicrune    ("EpicRune",      "epic",         db, bus, shutdown);
+    OverwatchAgent    overwatch   ("Overwatch",     "overwatch",    db, bus, shutdown);
+    LibrarianAgent    librarian   ("Librarian",     "librarian",    db, bus, shutdown);
+    LoadSimulatorAgent loadsim    ("LoadSim",       "loadsim",      db, bus, shutdown);
+
     // Register all agents in the DB
     db.register_agent("Heart",        "heart");
     db.register_agent("Worker",       "worker");
@@ -435,13 +499,20 @@ int main(int argc, char* argv[])
     db.register_agent("TorrentAgent", "torrent");
     db.register_agent("EdgeAgent",    "edge");
 
+    db.register_agent("Housekeeping",  "housekeeping");
+    db.register_agent("StrategyAgent", "strategy");
+    db.register_agent("EpicRune",      "epic");
+    db.register_agent("Overwatch",     "overwatch");
+    db.register_agent("Librarian",     "librarian");
+    db.register_agent("LoadSim",       "loadsim");
+
     // Register the local node
     db.upsert_node("local", "local_brain", "active");
-    brain_log("[brain] 10 agents registered, local node active\n");
+    brain_log("[brain] 16 agents registered, local node active\n");
 
     // ── Launch agent threads ─────────────────────────────────────────────────
     std::vector<std::thread> threads;
-    threads.reserve(12);
+    threads.reserve(18);
 
     threads.emplace_back([&heart]()   { heart.run();   });
     threads.emplace_back([&worker]()  { worker.run();  });
@@ -453,6 +524,12 @@ int main(int argc, char* argv[])
     threads.emplace_back([&node]()    { node.run();    });
     threads.emplace_back([&torrent]() { torrent.run(); });
     threads.emplace_back([&edge]()    { edge.run();    });
+    threads.emplace_back([&housekeeping]() { housekeeping.run(); });
+    threads.emplace_back([&strategy]()     { strategy.run();     });
+    threads.emplace_back([&epicrune]()     { epicrune.run();     });
+    threads.emplace_back([&overwatch]()    { overwatch.run();    });
+    threads.emplace_back([&librarian]()    { librarian.run();    });
+    threads.emplace_back([&loadsim]()      { loadsim.run();      });
 
     // ── HTTP server ──────────────────────────────────────────────────────────
     httplib::Server srv;
@@ -479,8 +556,14 @@ int main(int argc, char* argv[])
         "  POST http://localhost:%d/brain/events\n"
         "  POST http://localhost:%d/brain/trust\n"
         "  POST http://localhost:%d/brain/shutdown\n"
+        "  GET  http://localhost:%d/brain/agents\n"
+        "  GET  http://localhost:%d/brain/symbols\n"
+        "  POST http://localhost:%d/brain/symbols\n"
+        "  POST http://localhost:%d/brain/classify\n"
+        "  GET  http://localhost:%d/brain/knowledge\n"
         "Press ENTER to stop.\n",
         http_port, http_port, http_port,
+        http_port, http_port, http_port, http_port, http_port,
         http_port, http_port, http_port, http_port, http_port,
         http_port, http_port, http_port, http_port, http_port);
 

@@ -188,6 +188,34 @@ public:
     // ── Raw exec (locked) ─────────────────────────────────────────────────────
     void exec(const char* sql);      // acquires mtx_
 
+    // ── Extended node queries ──────────────────────────────────────────────────
+    nlohmann::json nodes_list();
+
+    // ── Typed event queries ────────────────────────────────────────────────────
+    nlohmann::json pending_events_of_type(const std::string& type, int limit = 5);
+
+    // ── Agent registry queries ─────────────────────────────────────────────────
+    nlohmann::json all_agents();
+
+    // ── Audit archival ─────────────────────────────────────────────────────────
+    int archive_old_audit(int days_old = 30);
+
+    // ── Symbols (14D QFS) ─────────────────────────────────────────────────────
+    int  insert_symbol(const nlohmann::json& doc);
+    nlohmann::json symbol_by_id(int id);
+    nlohmann::json symbols_query(const std::string& radical,
+                                  const std::string& layer, int limit = 50);
+
+    // ── Knowledge substrate ────────────────────────────────────────────────────
+    int  store_knowledge(const std::string& radical, const std::string& layer,
+                         const nlohmann::json& entry);
+    nlohmann::json query_knowledge(const std::string& radical, int limit = 20);
+
+    // ── Agent checkpoints ─────────────────────────────────────────────────────
+    int  save_checkpoint(const std::string& agent_name,
+                          const nlohmann::json& state);
+    nlohmann::json load_checkpoint(const std::string& agent_name, int checkpoint_id);
+
 private:
     sqlite3*           db_  = nullptr;
     mutable std::mutex mtx_;
@@ -372,5 +400,84 @@ class EdgeAgent : public AgentBase {
 public:
     using AgentBase::AgentBase;
 protected:
-    int tick() override;   // stub — emits "agent_idle" every 10 s
+    int tick() override;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HousekeepingAgent — DB maintenance, audit archival, index optimization
+//   Tick interval: 30 000 ms
+//   Publishes: "housekeeping_cycle" with archived_audit count
+// ─────────────────────────────────────────────────────────────────────────────
+class HousekeepingAgent : public AgentBase {
+public:
+    using AgentBase::AgentBase;
+protected:
+    int tick() override;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// StrategyAgent — infers co-activation patterns; inserts strategies automatically
+//   Tick interval: 30 000 ms
+//   Publishes: "strategy_inferred" when a new strategy is created
+// ─────────────────────────────────────────────────────────────────────────────
+class StrategyAgent : public AgentBase {
+public:
+    using AgentBase::AgentBase;
+protected:
+    int tick() override;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EpicRuneAgent — detects runes with trust≥3.0 & usage≥100; archives them
+//   Tick interval: 60 000 ms
+//   Publishes: "epic_rune_born" when a rune achieves epic status
+// ─────────────────────────────────────────────────────────────────────────────
+class EpicRuneAgent : public AgentBase {
+public:
+    using AgentBase::AgentBase;
+protected:
+    int tick() override;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OverwatchAgent — monitors EventBus for anomalies; enforces system fairness
+//   Tick interval: 15 000 ms
+//   Publishes: "overwatch_alert" for anomalies, "overwatch_report" every 4 ticks
+// ─────────────────────────────────────────────────────────────────────────────
+class OverwatchAgent : public AgentBase {
+public:
+    OverwatchAgent(std::string name, std::string type,
+                   BrainDb& db, EventBus& bus, std::atomic<bool>& shutdown);
+    ~OverwatchAgent();
+protected:
+    int tick() override;
+private:
+    int sub_id_{-1};
+    std::mutex               win_mtx_;
+    std::map<std::string,int> event_window_;
+    int gc_kills_{0};
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LibrarianAgent — classifies 14D symbols; routes to appropriate agents
+//   Tick interval: 20 000 ms
+//   Publishes: "symbol_classified", "symbol_routed"
+// ─────────────────────────────────────────────────────────────────────────────
+class LibrarianAgent : public AgentBase {
+public:
+    using AgentBase::AgentBase;
+protected:
+    int tick() override;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LoadSimulatorAgent — generates synthetic load for stress testing
+//   Tick interval: 10 000 ms (first 5 ticks only, then every 30 ticks)
+//   Publishes: "load_sim_tick"
+// ─────────────────────────────────────────────────────────────────────────────
+class LoadSimulatorAgent : public AgentBase {
+public:
+    using AgentBase::AgentBase;
+protected:
+    int tick() override;
 };

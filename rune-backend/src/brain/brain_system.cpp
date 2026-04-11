@@ -26,14 +26,20 @@
 
 #include "brain_system.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 #include <thread>
 #include <chrono>
+
+#include <httplib.h>
+#include "../wallet/wallet.hpp"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilities
@@ -278,6 +284,57 @@ CREATE INDEX IF NOT EXISTS idx_audit_ts           ON audit(created_at);
 CREATE INDEX IF NOT EXISTS idx_nevents_pending    ON node_events(processed, priority DESC, created_at);
 CREATE INDEX IF NOT EXISTS idx_trust_subject      ON trust_ledger(subject, subject_type);
 CREATE INDEX IF NOT EXISTS idx_sizeass_table      ON size_assessment(table_name, sampled_at);
+
+-- symbols: 14-dimensional QFS symbol objects
+CREATE TABLE IF NOT EXISTS symbols (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    radical        TEXT    NOT NULL DEFAULT '',
+    layer          TEXT    NOT NULL DEFAULT 'SYNTHETIC',
+    sem_x          REAL    NOT NULL DEFAULT 0.0,
+    sem_y          REAL    NOT NULL DEFAULT 0.0,
+    sem_z          REAL    NOT NULL DEFAULT 0.0,
+    color_h        REAL    NOT NULL DEFAULT 0.0,
+    color_s        REAL    NOT NULL DEFAULT 0.0,
+    color_b        REAL    NOT NULL DEFAULT 0.0,
+    temporal_phase REAL    NOT NULL DEFAULT 0.0,
+    affinity_mask  INTEGER NOT NULL DEFAULT 0,
+    mutation_index INTEGER NOT NULL DEFAULT 0,
+    stroke_count   INTEGER NOT NULL DEFAULT 0,
+    fractal_depth  INTEGER NOT NULL DEFAULT 1,
+    compression_q  TEXT    NOT NULL DEFAULT 'LOSSLESS',
+    payload        TEXT    NOT NULL DEFAULT '{}',
+    checksum       TEXT    NOT NULL DEFAULT '',
+    version        INTEGER NOT NULL DEFAULT 1,
+    created_at     TEXT    DEFAULT (datetime('now')),
+    updated_at     TEXT    DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_symbols_radical   ON symbols(radical);
+CREATE INDEX IF NOT EXISTS idx_symbols_layer     ON symbols(layer);
+CREATE INDEX IF NOT EXISTS idx_symbols_temporal  ON symbols(temporal_phase);
+CREATE INDEX IF NOT EXISTS idx_symbols_affinity  ON symbols(affinity_mask);
+CREATE INDEX IF NOT EXISTS idx_symbols_mutation  ON symbols(mutation_index);
+
+-- knowledge: MemorySubstrate — radical-indexed knowledge entries
+CREATE TABLE IF NOT EXISTS knowledge (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    radical    TEXT    NOT NULL,
+    layer      TEXT    NOT NULL DEFAULT 'SYNTHETIC',
+    entry      TEXT    NOT NULL DEFAULT '{}',
+    sem_x      REAL    NOT NULL DEFAULT 0.0,
+    sem_y      REAL    NOT NULL DEFAULT 0.0,
+    sem_z      REAL    NOT NULL DEFAULT 0.0,
+    created_at TEXT    DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_radical ON knowledge(radical);
+
+-- agent_checkpoints: recovery snapshots per agent
+CREATE TABLE IF NOT EXISTS agent_checkpoints (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_name  TEXT    NOT NULL,
+    state       TEXT    NOT NULL DEFAULT '{}',
+    created_at  TEXT    DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_checkpoints_agent ON agent_checkpoints(agent_name);
 
     )sql");
 }
@@ -1171,6 +1228,344 @@ int BrainDb::quarantine_high_error_runes(int error_threshold)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BrainDb — extended queries and new substrate methods
+// ─────────────────────────────────────────────────────────────────────────────
+
+nlohmann::json BrainDb::nodes_list()
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "SELECT id,node_id,label,status,trust,last_seen FROM nodes"
+        " WHERE node_id != 'local' ORDER BY id ASC;",
+        -1, &stmt, nullptr);
+    auto arr = nlohmann::json::array();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        arr.push_back({
+            {"id",        sqlite3_column_int(stmt, 0)},
+            {"node_id",   txt(1)},
+            {"label",     txt(2)},
+            {"status",    txt(3)},
+            {"trust",     sqlite3_column_double(stmt, 4)},
+            {"last_seen", txt(5)}
+        });
+    }
+    sqlite3_finalize(stmt);
+    return arr;
+}
+
+nlohmann::json BrainDb::pending_events_of_type(const std::string& type, int limit)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "SELECT id,source,event_type,payload,priority FROM node_events"
+        " WHERE processed=0 AND event_type=?"
+        " ORDER BY priority DESC, id ASC LIMIT ?;",
+        -1, &stmt, nullptr);
+    sqlite3_bind_text(stmt, 1, type.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int (stmt, 2, limit);
+    auto arr = nlohmann::json::array();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        nlohmann::json pl;
+        try { pl = nlohmann::json::parse(txt(3)); }
+        catch (...) { pl = nlohmann::json::object(); }
+        arr.push_back({
+            {"id",         sqlite3_column_int(stmt, 0)},
+            {"source",     txt(1)},
+            {"event_type", txt(2)},
+            {"payload",    pl},
+            {"priority",   sqlite3_column_int(stmt, 4)}
+        });
+    }
+    sqlite3_finalize(stmt);
+    return arr;
+}
+
+nlohmann::json BrainDb::all_agents()
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "SELECT id,name,type,status,tick_count,error_count,last_tick"
+        " FROM agents ORDER BY id ASC;",
+        -1, &stmt, nullptr);
+    auto arr = nlohmann::json::array();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        arr.push_back({
+            {"id",          sqlite3_column_int(stmt, 0)},
+            {"name",        txt(1)},
+            {"type",        txt(2)},
+            {"status",      txt(3)},
+            {"tick_count",  sqlite3_column_int(stmt, 4)},
+            {"error_count", sqlite3_column_int(stmt, 5)},
+            {"last_tick",   txt(6)}
+        });
+    }
+    sqlite3_finalize(stmt);
+    return arr;
+}
+
+int BrainDb::archive_old_audit(int days_old)
+{
+    struct Row { int id; std::string agent, action, subject, detail, created_at; };
+    std::vector<Row> rows;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        sqlite3_stmt* stmt = nullptr;
+        std::string sql =
+            "SELECT id,agent,action,subject,detail,created_at FROM audit"
+            " WHERE created_at < datetime('now','-" + std::to_string(days_old) + " days')"
+            " LIMIT 200;";
+        sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        while (sqlite3_step(stmt) == SQLITE_ROW)
+            rows.push_back({sqlite3_column_int(stmt,0),txt(1),txt(2),txt(3),txt(4),txt(5)});
+        sqlite3_finalize(stmt);
+    }
+    for (const auto& r : rows) {
+        insert_artifact("audit_archive", r.agent, {
+            {"orig_id",    r.id},
+            {"agent",      r.agent},
+            {"action",     r.action},
+            {"subject",    r.subject},
+            {"detail",     r.detail},
+            {"created_at", r.created_at}
+        }, 0);
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            sqlite3_stmt* del = nullptr;
+            sqlite3_prepare_v2(db_, "DELETE FROM audit WHERE id=?;", -1, &del, nullptr);
+            sqlite3_bind_int(del, 1, r.id);
+            sqlite3_step(del);
+            sqlite3_finalize(del);
+        }
+    }
+    return static_cast<int>(rows.size());
+}
+
+int BrainDb::insert_symbol(const nlohmann::json& doc)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "INSERT INTO symbols (radical,layer,sem_x,sem_y,sem_z,color_h,color_s,color_b,"
+        "temporal_phase,affinity_mask,mutation_index,stroke_count,fractal_depth,"
+        "compression_q,payload,checksum,version)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);",
+        -1, &stmt, nullptr);
+    auto s = [&](const std::string& k, const std::string& def="") {
+        return doc.value(k, def);
+    };
+    sqlite3_bind_text  (stmt,  1, s("radical").c_str(),          -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt,  2, s("layer","SYNTHETIC").c_str(),-1, SQLITE_TRANSIENT);
+    sqlite3_bind_double(stmt,  3, doc.value("sem_x", 0.0));
+    sqlite3_bind_double(stmt,  4, doc.value("sem_y", 0.0));
+    sqlite3_bind_double(stmt,  5, doc.value("sem_z", 0.0));
+    sqlite3_bind_double(stmt,  6, doc.value("color_h", 0.0));
+    sqlite3_bind_double(stmt,  7, doc.value("color_s", 0.0));
+    sqlite3_bind_double(stmt,  8, doc.value("color_b", 0.0));
+    sqlite3_bind_double(stmt,  9, doc.value("temporal_phase", 0.0));
+    sqlite3_bind_int   (stmt, 10, doc.value("affinity_mask", 0));
+    sqlite3_bind_int   (stmt, 11, doc.value("mutation_index", 0));
+    sqlite3_bind_int   (stmt, 12, doc.value("stroke_count", 0));
+    sqlite3_bind_int   (stmt, 13, doc.value("fractal_depth", 1));
+    sqlite3_bind_text  (stmt, 14, s("compression_q","LOSSLESS").c_str(), -1, SQLITE_TRANSIENT);
+    std::string pl = doc.value("payload", nlohmann::json::object()).dump();
+    sqlite3_bind_text  (stmt, 15, pl.c_str(),             -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 16, s("checksum").c_str(),  -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int   (stmt, 17, doc.value("version", 1));
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return static_cast<int>(sqlite3_last_insert_rowid(db_));
+}
+
+nlohmann::json BrainDb::symbol_by_id(int id)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "SELECT id,radical,layer,sem_x,sem_y,sem_z,color_h,color_s,color_b,"
+        "temporal_phase,affinity_mask,mutation_index,stroke_count,fractal_depth,"
+        "compression_q,payload,checksum,version,created_at,updated_at"
+        " FROM symbols WHERE id=?;",
+        -1, &stmt, nullptr);
+    sqlite3_bind_int(stmt, 1, id);
+    if (sqlite3_step(stmt) != SQLITE_ROW) { sqlite3_finalize(stmt); return nullptr; }
+    auto txt = [&](int c) -> std::string {
+        const unsigned char* p = sqlite3_column_text(stmt, c);
+        return p ? reinterpret_cast<const char*>(p) : "";
+    };
+    nlohmann::json result = {
+        {"id",             sqlite3_column_int(stmt, 0)},
+        {"radical",        txt(1)},  {"layer",  txt(2)},
+        {"sem_x",          sqlite3_column_double(stmt, 3)},
+        {"sem_y",          sqlite3_column_double(stmt, 4)},
+        {"sem_z",          sqlite3_column_double(stmt, 5)},
+        {"color_h",        sqlite3_column_double(stmt, 6)},
+        {"color_s",        sqlite3_column_double(stmt, 7)},
+        {"color_b",        sqlite3_column_double(stmt, 8)},
+        {"temporal_phase", sqlite3_column_double(stmt, 9)},
+        {"affinity_mask",  sqlite3_column_int(stmt, 10)},
+        {"mutation_index", sqlite3_column_int(stmt, 11)},
+        {"stroke_count",   sqlite3_column_int(stmt, 12)},
+        {"fractal_depth",  sqlite3_column_int(stmt, 13)},
+        {"compression_q",  txt(14)}, {"payload", txt(15)},
+        {"checksum",       txt(16)},
+        {"version",        sqlite3_column_int(stmt, 17)},
+        {"created_at",     txt(18)}, {"updated_at", txt(19)}
+    };
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+nlohmann::json BrainDb::symbols_query(const std::string& radical,
+                                       const std::string& layer, int limit)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    std::string sql =
+        "SELECT id,radical,layer,sem_x,sem_y,sem_z,affinity_mask,mutation_index,"
+        "checksum,created_at FROM symbols WHERE 1=1";
+    if (!radical.empty()) sql += " AND radical=?1";
+    if (!layer.empty())   sql += " AND layer=?2";
+    sql += " ORDER BY id DESC LIMIT ?3;";
+    sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
+    if (!radical.empty()) sqlite3_bind_text(stmt, 1, radical.c_str(), -1, SQLITE_TRANSIENT);
+    if (!layer.empty())   sqlite3_bind_text(stmt, 2, layer.c_str(),   -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 3, limit);
+    auto arr = nlohmann::json::array();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        arr.push_back({
+            {"id",             sqlite3_column_int(stmt, 0)},
+            {"radical",        txt(1)},  {"layer", txt(2)},
+            {"sem_x",          sqlite3_column_double(stmt, 3)},
+            {"sem_y",          sqlite3_column_double(stmt, 4)},
+            {"sem_z",          sqlite3_column_double(stmt, 5)},
+            {"affinity_mask",  sqlite3_column_int(stmt, 6)},
+            {"mutation_index", sqlite3_column_int(stmt, 7)},
+            {"checksum",       txt(8)},  {"created_at", txt(9)}
+        });
+    }
+    sqlite3_finalize(stmt);
+    return arr;
+}
+
+int BrainDb::store_knowledge(const std::string& radical, const std::string& layer,
+                              const nlohmann::json& entry)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    std::string e = entry.dump();
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "INSERT INTO knowledge (radical,layer,entry,sem_x,sem_y,sem_z)"
+        " VALUES (?,?,?,?,?,?);",
+        -1, &stmt, nullptr);
+    sqlite3_bind_text  (stmt, 1, radical.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 2, layer.c_str(),   -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 3, e.c_str(),        -1, SQLITE_TRANSIENT);
+    auto sem = entry.value("semantic", nlohmann::json::array({0.0, 0.0, 0.0}));
+    sqlite3_bind_double(stmt, 4, sem.size() > 0 ? sem[0].get<double>() : 0.0);
+    sqlite3_bind_double(stmt, 5, sem.size() > 1 ? sem[1].get<double>() : 0.0);
+    sqlite3_bind_double(stmt, 6, sem.size() > 2 ? sem[2].get<double>() : 0.0);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return static_cast<int>(sqlite3_last_insert_rowid(db_));
+}
+
+nlohmann::json BrainDb::query_knowledge(const std::string& radical, int limit)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "SELECT id,radical,layer,entry,sem_x,sem_y,sem_z,created_at"
+        " FROM knowledge WHERE radical=? ORDER BY id DESC LIMIT ?;",
+        -1, &stmt, nullptr);
+    sqlite3_bind_text(stmt, 1, radical.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int (stmt, 2, limit);
+    auto arr = nlohmann::json::array();
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto txt = [&](int c) -> std::string {
+            const unsigned char* p = sqlite3_column_text(stmt, c);
+            return p ? reinterpret_cast<const char*>(p) : "";
+        };
+        nlohmann::json e;
+        try { e = nlohmann::json::parse(txt(3)); } catch (...) { e = nlohmann::json::object(); }
+        arr.push_back({
+            {"id",         sqlite3_column_int(stmt, 0)},
+            {"radical",    txt(1)},  {"layer", txt(2)},
+            {"entry",      e},
+            {"sem_x",      sqlite3_column_double(stmt, 4)},
+            {"sem_y",      sqlite3_column_double(stmt, 5)},
+            {"sem_z",      sqlite3_column_double(stmt, 6)},
+            {"created_at", txt(7)}
+        });
+    }
+    sqlite3_finalize(stmt);
+    return arr;
+}
+
+int BrainDb::save_checkpoint(const std::string& agent_name, const nlohmann::json& state)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    std::string s = state.dump();
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "INSERT INTO agent_checkpoints (agent_name,state) VALUES (?,?);",
+        -1, &stmt, nullptr);
+    sqlite3_bind_text(stmt, 1, agent_name.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, s.c_str(),          -1, SQLITE_TRANSIENT);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return static_cast<int>(sqlite3_last_insert_rowid(db_));
+}
+
+nlohmann::json BrainDb::load_checkpoint(const std::string& agent_name, int checkpoint_id)
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(db_,
+        "SELECT id,state,created_at FROM agent_checkpoints"
+        " WHERE agent_name=? AND id=?;",
+        -1, &stmt, nullptr);
+    sqlite3_bind_text(stmt, 1, agent_name.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int (stmt, 2, checkpoint_id);
+    if (sqlite3_step(stmt) != SQLITE_ROW) { sqlite3_finalize(stmt); return nullptr; }
+    auto txt = [&](int c) -> std::string {
+        const unsigned char* p = sqlite3_column_text(stmt, c);
+        return p ? reinterpret_cast<const char*>(p) : "";
+    };
+    nlohmann::json s;
+    try { s = nlohmann::json::parse(txt(1)); } catch (...) { s = nlohmann::json::object(); }
+    nlohmann::json result = {
+        {"id",         sqlite3_column_int(stmt, 0)},
+        {"state",      s},
+        {"created_at", txt(2)}
+    };
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // BrainDb — batched counts and size assessment
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1606,45 +2001,582 @@ int RuneFusionEngine::tick()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stub agents
+// ChatAgent — LLM integration via RUNE_LLM_URL
 // ─────────────────────────────────────────────────────────────────────────────
 
 int ChatAgent::tick()
 {
-    // EXTEND: poll node_events WHERE event_type='chat_route' LIMIT 5,
-    // call LLM backend, post reply as "chat_response" event, audit_log result.
-    emit("agent_idle", {{"agent", name_}});
-    return 5000;
+    auto events = db_.pending_events_of_type("chat_route", 3);
+    if (events.empty()) return 5000;
+
+    const char* llm_url   = std::getenv("RUNE_LLM_URL");
+    const char* llm_model = std::getenv("RUNE_LLM_MODEL");
+    std::string model     = llm_model ? llm_model : "local-model";
+
+    for (const auto& ev : events) {
+        int         ev_id   = ev.value("id", -1);
+        std::string message = ev["payload"].value("message", "");
+        if (message.empty()) { db_.mark_processed(ev_id); continue; }
+
+        std::string reply;
+        if (llm_url) {
+            std::string url(llm_url);
+            std::string host; int port = 80; std::string path = "/";
+            size_t pp = url.find("://");
+            if (pp != std::string::npos) url = url.substr(pp + 3);
+            size_t sl = url.find('/');
+            if (sl != std::string::npos) { path = url.substr(sl); url = url.substr(0, sl); }
+            size_t co = url.find(':');
+            if (co != std::string::npos) {
+                host = url.substr(0, co);
+                try { port = std::stoi(url.substr(co + 1)); } catch (...) { port = 80; }
+            } else { host = url; }
+
+            try {
+                httplib::Client cli(host, port);
+                cli.set_connection_timeout(5);
+                cli.set_read_timeout(30);
+                nlohmann::json body = {
+                    {"model",    model},
+                    {"messages", {{{"role","user"},{"content",message}}}},
+                    {"stream",   false}
+                };
+                auto res = cli.Post(path, body.dump(), "application/json");
+                if (res && res->status == 200) {
+                    auto j = nlohmann::json::parse(res->body);
+                    if (j.contains("choices") && j["choices"].is_array()
+                            && !j["choices"].empty()
+                            && j["choices"][0].contains("message")
+                            && j["choices"][0]["message"].contains("content")) {
+                        reply = j["choices"][0]["message"]["content"].get<std::string>();
+                    } else {
+                        reply = "[llm] unexpected response shape";
+                    }
+                } else {
+                    reply = "[llm error] status=" +
+                            (res ? std::to_string(res->status) : "no_response");
+                }
+            } catch (const std::exception& e) {
+                reply = std::string("[llm error] ") + e.what();
+            }
+        } else {
+            reply = "[echo] " + message + "  (set RUNE_LLM_URL to enable LLM replies)";
+        }
+
+        emit("chat_response", {{"message", message}, {"reply", reply}});
+        db_.audit_log(name_, "chat_reply", "llm",
+                      {{"message", message}, {"reply", reply}});
+        db_.mark_processed(ev_id);
+        db_.update_agent_tick(name_);
+        log("[Chat] replied to: %.60s\n", message.c_str());
+    }
+    return 2000;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WalletAgent — event-driven Ed25519 signing / verification
+// ─────────────────────────────────────────────────────────────────────────────
 
 int WalletAgent::tick()
 {
-    // EXTEND: poll node_events WHERE event_type='wallet_sign' LIMIT 5,
-    // call wallet::sign() from src/wallet/wallet.hpp, emit "wallet_signature".
-    emit("agent_idle", {{"agent", name_}});
-    return 5000;
+    {
+        auto events = db_.pending_events_of_type("wallet_sign", 5);
+        for (const auto& ev : events) {
+            int ev_id = ev.value("id", -1);
+            try {
+                std::string msg_hex  = ev["payload"].value("message_hex", "");
+                std::string key_path = ev["payload"].value("key_path", "wallet.json");
+                auto kp      = wallet::load(key_path);
+                auto msg_raw = wallet::from_hex(msg_hex);
+                if (msg_raw.empty()) throw std::runtime_error("empty message_hex");
+                auto sig     = wallet::sign(kp, {msg_raw.data(), msg_raw.size()});
+                std::string sig_hex = wallet::to_hex(sig);
+                std::string pub_hex = wallet::to_hex(kp.public_key);
+                emit("wallet_signature", {
+                    {"public_key",  pub_hex},
+                    {"signature",   sig_hex},
+                    {"message_hex", msg_hex}
+                });
+                db_.audit_log(name_, "wallet_sign", pub_hex,
+                    {{"message_hex", msg_hex}, {"sig_hex", sig_hex}});
+                db_.record_trust(name_, "agent", 0.01, "successful_signing");
+            } catch (const std::exception& e) {
+                emit("wallet_error", {{"error", e.what()}, {"event_id", ev_id}});
+                db_.increment_agent_errors(name_);
+            }
+            db_.mark_processed(ev_id);
+        }
+    }
+    {
+        auto events = db_.pending_events_of_type("wallet_verify", 5);
+        for (const auto& ev : events) {
+            int ev_id = ev.value("id", -1);
+            try {
+                std::string pub_hex = ev["payload"].value("public_key", "");
+                std::string msg_hex = ev["payload"].value("message_hex", "");
+                std::string sig_hex = ev["payload"].value("signature",   "");
+                auto pub_raw = wallet::from_hex(pub_hex);
+                auto msg_raw = wallet::from_hex(msg_hex);
+                auto sig_raw = wallet::from_hex(sig_hex);
+                if (pub_raw.size() != 32 || sig_raw.size() != 64)
+                    throw std::runtime_error("invalid key/sig length");
+                std::array<uint8_t,32> pk{};
+                std::array<uint8_t,64> sv{};
+                std::copy(pub_raw.begin(), pub_raw.end(), pk.begin());
+                std::copy(sig_raw.begin(), sig_raw.end(), sv.begin());
+                bool ok = wallet::verify(pk, {msg_raw.data(), msg_raw.size()}, sv);
+                emit("wallet_verify_result", {{"valid", ok}, {"public_key", pub_hex}});
+                db_.audit_log(name_, "wallet_verify", pub_hex, {{"valid", ok}});
+            } catch (const std::exception& e) {
+                emit("wallet_error", {{"error", e.what()}, {"event_id", ev_id}});
+            }
+            db_.mark_processed(ev_id);
+        }
+    }
+
+    db_.update_agent_tick(name_);
+    return 3000;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NodeAgent — peer health monitoring + trust updates
+// ─────────────────────────────────────────────────────────────────────────────
 
 int NodeAgent::tick()
 {
-    // EXTEND: iterate nodes table WHERE status != 'local',
-    // HTTP GET /brain/health on each peer, update last_seen + trust.
-    emit("agent_idle", {{"agent", name_}});
+    auto nodes = db_.nodes_list();
+    if (nodes.empty()) return 10000;
+
+    for (const auto& node : nodes) {
+        std::string node_id = node.value("node_id", "");
+        std::string host    = node.value("host", "");
+        int         port    = node.value("port", 7071);
+        if (host.empty()) continue;
+
+        bool reachable = false;
+        try {
+            httplib::Client cli(host, port);
+            cli.set_connection_timeout(3);
+            cli.set_read_timeout(5);
+            auto res = cli.Get("/brain/health");
+            reachable = (res && res->status == 200);
+        } catch (...) { reachable = false; }
+
+        if (reachable) {
+            db_.record_trust(node_id, "node", 0.01, "health_check_ok");
+            emit("node_healthy", {{"node_id", node_id}, {"host", host}, {"port", port}});
+        } else {
+            db_.record_trust(node_id, "node", -0.05, "health_check_failed");
+            db_.upsert_node(node_id, node.value("label", node_id), "unreachable");
+            emit("node_unreachable", {{"node_id", node_id}, {"host", host}});
+            log("[Node] peer %s unreachable\n", node_id.c_str());
+        }
+    }
+
+    db_.update_agent_tick(name_);
     return 10000;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TorrentAgent — piece tracking and replication across the node mesh
+// ─────────────────────────────────────────────────────────────────────────────
+
 int TorrentAgent::tick()
 {
-    // EXTEND: manage torrent_piece artifacts, enqueue "torrent_piece" events,
-    // track piece availability and replication across the node mesh.
-    emit("agent_idle", {{"agent", name_}});
+    auto events = db_.pending_events_of_type("torrent_piece", 5);
+    for (const auto& ev : events) {
+        int ev_id = ev.value("id", -1);
+        try {
+            std::string piece_id  = ev["payload"].value("piece_id",  "");
+            std::string data_hash = ev["payload"].value("data_hash", "");
+            int         size_kb   = ev["payload"].value("size_kb",   0);
+            std::string source    = ev["payload"].value("source",    "local");
+
+            db_.insert_artifact("torrent_piece", name_, {
+                {"piece_id",  piece_id},
+                {"data_hash", data_hash},
+                {"size_kb",   size_kb},
+                {"source",    source},
+                {"available", true}
+            }, 86400 * 7);
+
+            emit("torrent_piece_stored", {
+                {"piece_id",  piece_id},
+                {"data_hash", data_hash},
+                {"size_kb",   size_kb}
+            });
+            db_.audit_log(name_, "piece_stored", piece_id,
+                {{"data_hash", data_hash}, {"size_kb", size_kb}});
+        } catch (const std::exception& e) {
+            emit("torrent_error", {{"error", e.what()}, {"event_id", ev_id}});
+            db_.increment_agent_errors(name_);
+        }
+        db_.mark_processed(ev_id);
+    }
+
+    if (tick_count_ % 6 == 0) {
+        auto peers = db_.nodes_list();
+        emit("torrent_status", {
+            {"peer_count", (int)peers.size()},
+            {"tick",       tick_count_}
+        });
+    }
+
+    db_.update_agent_tick(name_);
     return 30000;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// EdgeAgent — low-latency edge compute (hashing, QR detection events)
+// ─────────────────────────────────────────────────────────────────────────────
+
 int EdgeAgent::tick()
 {
-    // EXTEND: handle low-latency edge tasks (QR decode, image hash, etc.),
-    // post results as "edge_result" events for real-time visualisation layers.
-    emit("agent_idle", {{"agent", name_}});
+    auto events = db_.pending_events_of_type("edge_task", 10);
+    for (const auto& ev : events) {
+        int ev_id = ev.value("id", -1);
+        try {
+            std::string task_type = ev["payload"].value("task_type", "hash");
+            std::string data_hex  = ev["payload"].value("data_hex",  "");
+
+            nlohmann::json result;
+            if (task_type == "hash") {
+                uint64_t h = 14695981039346656037ULL;
+                for (unsigned char c : data_hex) {
+                    h ^= static_cast<uint64_t>(c);
+                    h *= 1099511628211ULL;
+                }
+                std::ostringstream oss;
+                oss << std::hex << std::setw(16) << std::setfill('0') << h;
+                result = {{"task_type", "hash"}, {"hash", oss.str()}, {"algo", "fnv1a64"}};
+            } else if (task_type == "qr_detect") {
+                result = {
+                    {"task_type", "qr_detect"},
+                    {"detected",  false},
+                    {"note",      "QR library not linked; set task_type=hash for hash ops"}
+                };
+            } else {
+                result = {{"task_type", task_type}, {"error", "unknown_task_type"}};
+            }
+
+            emit("edge_result", {{"event_id", ev_id}, {"result", result}});
+            db_.audit_log(name_, "edge_task", task_type, result);
+        } catch (const std::exception& e) {
+            emit("edge_error", {{"error", e.what()}, {"event_id", ev_id}});
+            db_.increment_agent_errors(name_);
+        }
+        db_.mark_processed(ev_id);
+    }
+
+    db_.update_agent_tick(name_);
+    return 10000;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HousekeepingAgent — DB maintenance and audit archival
+// ─────────────────────────────────────────────────────────────────────────────
+
+int HousekeepingAgent::tick()
+{
+    int archived = db_.archive_old_audit(30);
+    if (archived > 0) {
+        db_.audit_log(name_, "audit_archive", "audit", {{"archived", archived}});
+        log("[Housekeeping] archived %d old audit rows\n", archived);
+    }
+
+    if (tick_count_ % 10 == 0) {
+        db_.exec("PRAGMA optimize;");
+        log("[Housekeeping] PRAGMA optimize complete\n");
+    }
+
+    db_.update_agent_tick(name_);
+    emit("housekeeping_cycle", {{"archived_audit", archived}, {"tick", tick_count_}});
+    return 30000;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// StrategyAgent — infers co-activation patterns from audit log
+// ─────────────────────────────────────────────────────────────────────────────
+
+int StrategyAgent::tick()
+{
+    auto runes = db_.all_runes(200, 0);
+
+    std::vector<std::pair<int,std::string>> ranked;
+    for (const auto& r : runes) {
+        if (r.value("active", 0) == 1)
+            ranked.push_back({r.value("usage_count", 0), r.value("name", "")});
+    }
+    std::sort(ranked.begin(), ranked.end(), std::greater<>());
+
+    if (ranked.size() >= 3 && ranked[0].first >= 3) {
+        auto n0 = ranked[0].second;
+        auto n1 = ranked[1].second;
+        auto n2 = ranked[2].second;
+        std::string strat_name = "inferred_"
+            + n0.substr(0, std::min<size_t>(4, n0.size()))
+            + n1.substr(0, std::min<size_t>(4, n1.size()))
+            + n2.substr(0, std::min<size_t>(4, n2.size()));
+
+        auto existing = db_.strategy_by_name(strat_name);
+        if (existing.is_null()) {
+            nlohmann::json rune_ids = {n0, n1, n2};
+            db_.insert_strategy(strat_name,
+                "Auto-inferred co-activation pattern", rune_ids, 1);
+            emit("strategy_inferred", {{"name", strat_name}, {"runes", rune_ids}});
+            db_.audit_log(name_, "strategy_infer", strat_name, {{"runes", rune_ids}});
+            log("[Strategy] inferred: %s\n", strat_name.c_str());
+        }
+    }
+
+    db_.update_agent_tick(name_);
+    return 30000;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EpicRuneAgent — detects runes achieving epic status (trust≥3 & usage≥100)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int EpicRuneAgent::tick()
+{
+    auto runes = db_.all_runes(200, 0);
+    for (const auto& r : runes) {
+        double      trust = r.value("trust", 0.0);
+        int         usage = r.value("usage_count", 0);
+        int         level = r.value("level", 0);
+        std::string name  = r.value("name",  "");
+        std::string glyph = r.value("glyph", "");
+
+        if (trust >= 3.0 && usage >= 100 && level >= 3) {
+            std::string narrative =
+                "The rune " + name + " (" + glyph + ") has achieved epic status: "
+                "trust=" + std::to_string(trust) +
+                ", usage=" + std::to_string(usage) +
+                ", level=" + std::to_string(level) + ".";
+
+            db_.insert_artifact("epic_rune", name_, {
+                {"rune",      name},
+                {"glyph",     "\xe2\x9f\xa8" + glyph + "\xe2\x9f\xa9"},
+                {"trust",     trust},
+                {"usage",     usage},
+                {"level",     level},
+                {"narrative", narrative}
+            }, 0);
+            db_.audit_log(name_, "epic_rune_born", name,
+                {{"trust", trust}, {"usage", usage}});
+            emit("epic_rune_born", {
+                {"rune",      name},
+                {"glyph",     glyph},
+                {"narrative", narrative},
+                {"trust",     trust},
+                {"usage",     usage}
+            });
+            log("[Epic] %s reached epic status (trust=%.2f usage=%d)\n",
+                name.c_str(), trust, usage);
+        }
+    }
+
+    db_.update_agent_tick(name_);
+    return 60000;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OverwatchAgent — EventBus anomaly monitor + system health reports
+// ─────────────────────────────────────────────────────────────────────────────
+
+OverwatchAgent::OverwatchAgent(std::string name, std::string type,
+                                BrainDb& db, EventBus& bus,
+                                std::atomic<bool>& shutdown)
+    : AgentBase(std::move(name), std::move(type), db, bus, shutdown)
+{
+    sub_id_ = bus_.subscribe([this](const BrainEvent& ev) {
+        std::lock_guard<std::mutex> lk(win_mtx_);
+        event_window_[ev.type]++;
+        if (ev.type == "gc_complete") {
+            auto it = ev.payload.find("quarantined");
+            if (it != ev.payload.end() && it->is_number())
+                gc_kills_ += it->get<int>();
+        }
+    });
+}
+
+OverwatchAgent::~OverwatchAgent()
+{
+    if (sub_id_ >= 0) bus_.unsubscribe(sub_id_);
+}
+
+int OverwatchAgent::tick()
+{
+    std::map<std::string,int> snapshot;
+    int gc_kills;
+    {
+        std::lock_guard<std::mutex> lk(win_mtx_);
+        snapshot  = event_window_;
+        gc_kills  = gc_kills_;
+        event_window_.clear();
+        gc_kills_ = 0;
+    }
+
+    if (gc_kills > 5) {
+        emit("overwatch_alert", {
+            {"anomaly",  "gc_kill_rate"},
+            {"gc_kills", gc_kills},
+            {"action",   "consider slowing trust decay rate"}
+        });
+        db_.audit_log(name_, "anomaly", "gc_kill_rate", {{"gc_kills", gc_kills}});
+        log("[Overwatch] ALERT: GC killed %d runes in last window\n", gc_kills);
+    }
+
+    int unknown = snapshot.count("worker_unknown") ? snapshot.at("worker_unknown") : 0;
+    if (unknown > 20) {
+        emit("overwatch_alert", {
+            {"anomaly", "unknown_event_flood"},
+            {"count",   unknown}
+        });
+    }
+
+    if (tick_count_ % 4 == 0) {
+        auto c      = db_.all_counts();
+        auto agents = db_.all_agents();
+        emit("overwatch_report", {
+            {"runes",   c.runes},
+            {"agents",  c.agents},
+            {"pending", c.pending_events},
+            {"gc_kills_last_window", gc_kills},
+            {"event_counts", snapshot},
+            {"agent_list", agents}
+        });
+    }
+
+    db_.update_agent_tick(name_);
+    return 15000;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LibrarianAgent — symbol classification and agent routing (§17.4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int LibrarianAgent::tick()
+{
+    auto events = db_.pending_events_of_type("classify_symbol", 5);
+    for (const auto& ev : events) {
+        int ev_id = ev.value("id", -1);
+        try {
+            const auto& pl = ev["payload"];
+            std::string radical = pl.value("radical", "");
+            std::string layer   = pl.value("layer",   "SYNTHETIC");
+
+            std::string dewey_class;
+            if (layer == "OLD_NORSE" || layer == "ICELANDIC")
+                dewey_class = "800.RUNIC";
+            else if (layer == "CJK")
+                dewey_class = "400.KANGXI";
+            else
+                dewey_class = "000.SYNTHETIC";
+
+            nlohmann::json route_to = nlohmann::json::array();
+            if (!radical.empty())            route_to.push_back("LibrarianAgent");
+            if (layer == "OLD_NORSE")        route_to.push_back("RuneFusionEngine");
+            if (pl.contains("message"))      route_to.push_back("ChatAgent");
+            if (pl.contains("data_hex"))     route_to.push_back("EdgeAgent");
+            if (pl.contains("sign_request")) route_to.push_back("WalletAgent");
+
+            double sem_x = pl.value("sem_x", 0.0);
+            double sem_y = pl.value("sem_y", 0.0);
+            double sem_z = pl.value("sem_z", 0.0);
+            db_.store_knowledge(radical, layer, {
+                {"classification", dewey_class},
+                {"route_to",       route_to},
+                {"source_event",   ev_id},
+                {"semantic",       nlohmann::json::array({sem_x, sem_y, sem_z})}
+            });
+
+            emit("symbol_classified", {
+                {"event_id",    ev_id},
+                {"radical",     radical},
+                {"layer",       layer},
+                {"dewey_class", dewey_class},
+                {"route_to",    route_to}
+            });
+
+            for (const auto& target : route_to) {
+                if (target == "EdgeAgent" && pl.contains("data_hex")) {
+                    db_.enqueue_event(name_, "edge_task", {
+                        {"task_type", "hash"},
+                        {"data_hex",  pl["data_hex"]}
+                    });
+                }
+                if (target == "ChatAgent" && pl.contains("message")) {
+                    db_.enqueue_event(name_, "chat_request", {
+                        {"message", pl["message"]}
+                    }, 1);
+                }
+            }
+
+            db_.audit_log(name_, "classify", radical,
+                {{"dewey_class", dewey_class}, {"route_to", route_to}});
+        } catch (const std::exception& e) {
+            emit("librarian_error", {{"error", e.what()}, {"event_id", ev_id}});
+            db_.increment_agent_errors(name_);
+        }
+        db_.mark_processed(ev_id);
+    }
+
+    if (tick_count_ % 8 == 0) {
+        auto runes = db_.all_runes(200, 0);
+        for (const auto& r : runes) {
+            std::string name  = r.value("name",  "");
+            std::string glyph = r.value("glyph", "");
+            std::string cat   = r.value("category", "elemental");
+            if (name.empty()) continue;
+            db_.store_knowledge(glyph, "OLD_NORSE", {
+                {"rune_name",   name},
+                {"category",    cat},
+                {"trust",       r.value("trust", 1.0)},
+                {"usage_count", r.value("usage_count", 0)}
+            });
+        }
+        emit("catalog_updated", {{"rune_count", (int)runes.size()}});
+    }
+
+    db_.update_agent_tick(name_);
+    return 20000;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LoadSimulatorAgent — synthetic event injection for stress testing
+// ─────────────────────────────────────────────────────────────────────────────
+
+int LoadSimulatorAgent::tick()
+{
+    if (tick_count_ > 5 && tick_count_ % 30 != 0) return 10000;
+
+    static int sim_counter = 0;
+    ++sim_counter;
+
+    static const std::array<const char*,5> targets = {
+        "Fehu","Ansuz","Dagaz","Perthro","Mannaz"
+    };
+    std::string target = targets[sim_counter % targets.size()];
+
+    db_.enqueue_event("LoadSim", "chat_request", {
+        {"message", "Synthetic load test message #" + std::to_string(sim_counter)},
+        {"sim", true}
+    });
+    db_.enqueue_event("LoadSim", "rune_trust", {
+        {"subject", target}, {"delta", 0.01}, {"reason", "load_sim"}
+    });
+    db_.enqueue_event("LoadSim", "classify_symbol", {
+        {"radical", target},
+        {"layer",   "OLD_NORSE"},
+        {"sem_x",   0.1 * (sim_counter % 10 - 5)},
+        {"sem_y",   0.1 * (sim_counter % 7 - 3)},
+        {"sem_z",   0.0}
+    });
+
+    emit("load_sim_tick", {{"sim_counter", sim_counter}, {"target", target}});
+    db_.update_agent_tick(name_);
+    log("[LoadSim] tick #%d — injected events for rune=%s\n",
+        tick_count_, target.c_str());
     return 10000;
 }
