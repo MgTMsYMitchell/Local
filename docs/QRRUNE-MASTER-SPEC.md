@@ -324,420 +324,796 @@ EXAMPLE: Encoding "three-fold increase"
 
 ## 4. Angular vs Curved Glyph Partitioning
 
-Every glyph radical belongs to one of two primary stroke families: **Angular** (hard-edged,
-algorithmic, structural) or **Curved** (organic, relational, living). This partition is not
-aesthetic — it is semantic.
+A foundational design axis of QRrune is the angular/curved duality — a binary partition that
+encodes the fundamental nature of a concept before any semantic content is read.
 
-### 4.1 The Partition Axiom
-
-```
-AXIOM: SEMANTIC DUALITY
-  Angular strokes  → deterministic, computational, structural concepts
-  Curved strokes   → probabilistic, biological, relational concepts
-  Mixed glyphs     → hybrid domains (AI, trust, memory)
-```
-
-### 4.2 Angular Domain Catalogue
-
-| Code | Stroke Form | Semantic Domain | Example Concept |
-|------|------------|-----------------|-----------------|
-| ANG-D01 | Single vertical bar | Identity, uniqueness | Node ID |
-| ANG-D02 | Double horizontal | Equality, parity | Hash match |
-| ANG-D03 | Nested right angles | Recursion, containment | Self-reference |
-| ANG-D04 | X-cross | Error, cancellation | Quarantine |
-| ANG-D05 | Grid cross | Network intersection | Mesh node |
-| ANG-D06 | Stacked chevrons | Hierarchy, ordering | Priority queue |
-| ANG-D07 | Hollow square | Boundary, scope | Namespace |
-| ANG-D08 | Diagonal slash | Division, cut | Partition |
-
-### 4.3 Curved Domain Catalogue
-
-| Code | Stroke Form | Semantic Domain | Example Concept |
-|------|------------|-----------------|-----------------|
-| CRV-D01 | Sine wave | Flow, rhythm | Heartbeat |
-| CRV-D02 | Spiral | Growth, recursion | Mycelium spread |
-| CRV-D03 | Arc (open) | Possibility, potential | Pending |
-| CRV-D04 | Full circle | Completion, wholeness | Cycle done |
-| CRV-D05 | Teardrop | Origin, source | Seed node |
-| CRV-D06 | Figure-eight | Infinity, balance | Trust loop |
-| CRV-D07 | S-curve | Transition, bridge | State change |
-| CRV-D08 | Tendril hook | Connection, attachment | Edge in mesh |
-
-### 4.4 Mixed-Domain (Hybrid) Radicals
-
-Mixed glyphs are constructed by overlaying one angular and one curved stroke. They encode
-concepts that live at the boundary of the two worlds.
-
-| Code | Composition | Concept |
-|------|-------------|---------|
-| HYB-01 | ANG-D01 + CRV-D04 | Agent identity (fixed but alive) |
-| HYB-02 | ANG-D05 + CRV-D08 | Peer connection in mesh |
-| HYB-03 | ANG-D07 + CRV-D02 | Bounded growth (strategy execution) |
-| HYB-04 | ANG-D04 + CRV-D06 | Trust under quarantine |
-| HYB-05 | ANG-D06 + CRV-D01 | Ordered flow (event queue) |
-
-### 4.5 Visual Rendering Rules
+### 4.1 The Partition Principle
 
 ```
-RENDERING PRIORITY (z-order):
-  1. Background grid or halo (if present)
-  2. Curved strokes (lower layer)
-  3. Angular strokes (upper layer)
-  4. Wedge terminals / diacritical dots (topmost)
-
-STROKE WEIGHT ENCODING:
-  Thin  (1px)  → whisper, background process, low priority
-  Medium (2px) → normal operation
-  Bold  (3px)  → alert, primary concept, high trust
+┌─────────────────────────────────────────────────────────────┐
+│                       GLYPH UNIVERSE                        │
+│                                                             │
+│  ┌─────────────────────┐    ┌─────────────────────────┐    │
+│  │   ANGULAR DOMAIN    │    │     CURVED DOMAIN        │    │
+│  │                     │    │                          │    │
+│  │  Structure          │    │  Process                 │    │
+│  │  Logic              │    │  Emotion                 │    │
+│  │  Boundary           │    │  Flow                    │    │
+│  │  Discrete           │    │  Continuous              │    │
+│  │  Mineral            │    │  Organic                 │    │
+│  │  Built              │    │  Grown                   │    │
+│  │  Static             │    │  Dynamic                 │    │
+│  │  Defined            │    │  Emergent                │    │
+│  │                     │    │                          │    │
+│  │  Strokes: │─/\+×    │    │  Strokes: )(~○◠◡∿        │    │
+│  └─────────────────────┘    └──────────────────────────┘    │
+│                                                             │
+│                ┌──────────────────────┐                     │
+│                │      HYBRID ZONE     │                     │
+│                │  (Mixed strokes)     │                     │
+│                │  Transition states   │                     │
+│                │  Duality concepts    │                     │
+│                └──────────────────────┘                     │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+### 4.2 Angular Domain — Detailed
+
+Angular glyphs encode structural, logical, bounded, and constructed concepts.
+
+| Subcategory | Semantic Field | Stroke Profile | Examples |
+|-------------|---------------|----------------|----------|
+| Architecture | Walls, frames, containers, limits | Right angles, parallel lines | House, boundary, law, rule |
+| Logic | Boolean, conditional, causal | Crosses, chevrons, branches | If/then, and/or, because |
+| Hierarchy | Rank, order, sequence, priority | Vertical stacks, ladders | Parent, child, root, leaf |
+| Measurement | Quantity, distance, precision | Grid lines, tick marks | Count, length, exact, equal |
+| Mineral | Stone, metal, crystal, earth-solid | Sharp edges, facets | Rock, iron, gem, salt |
+| Technology | Tools, machines, constructs | Interlocking angles | Gear, circuit, bridge, code |
+
+**Angular Stroke Rules:**
+
+```
+1. All angles are multiples of 15° (15, 30, 45, 60, 75, 90)
+2. No stroke curves — all paths are straight segments
+3. Corners are sharp (no rounding)
+4. Minimum stroke length: 2 grid units
+5. Maximum strokes per radical: 5
+```
+
+### 4.3 Curved Domain — Detailed
+
+Curved glyphs encode processual, organic, flowing, and emergent concepts.
+
+| Subcategory | Semantic Field | Stroke Profile | Examples |
+|-------------|---------------|----------------|----------|
+| Organic | Life, growth, decay, biology | Arcs, spirals, waves | Tree, root, bloom, spore |
+| Emotion | Feeling, mood, affect, desire | Flowing curves, swells | Joy, grief, longing, calm |
+| Flow | Water, air, current, diffusion | Sine waves, streams | River, wind, breath, pour |
+| Cycle | Season, phase, orbit, rhythm | Circles, ellipses, loops | Moon, tide, heartbeat, year |
+| Relation | Bond, kinship, affinity, mesh | Intertwined curves | Love, friendship, symbiosis |
+| Music | Sound, vibration, harmony, tone | Waveforms, resonance arcs | Song, echo, chord, silence |
+
+**Curved Stroke Rules:**
+
+```
+1. All curves are segments of circles or ellipses (Bézier control points allowed)
+2. No sharp corners — all junctions are smooth (G1 continuity minimum)
+3. Minimum curve radius: 1 grid unit
+4. Spirals rotate counterclockwise by convention (clockwise = inverse)
+5. Maximum strokes per radical: 5
+```
+
+### 4.4 Hybrid Zone
+
+Some concepts inherently span both domains. These use mixed stroke construction:
+
+```
+HYBRID CONSTRUCTION RULES
+═════════════════════════
+1. Angular strokes form the LEFT/BOTTOM foundation
+2. Curved strokes form the RIGHT/TOP elaboration
+3. The junction point is marked with a transition dot (•)
+4. Reading order: angular base → transition → curved extension
+
+EXAMPLES OF HYBRID CONCEPTS:
+  "bridge"       = angular (structure) + curved (connection)
+  "algorithm"    = angular (logic) + curved (flow)
+  "metamorphosis"= angular (before-state) + curved (becoming)
+  "lightning"    = angular (energy) + curved (path)
+  "melody"       = angular (note/structure) + curved (expression)
+```
+
+### 4.5 Partition Decision Tree
+
+```
+Is the concept primarily about STRUCTURE or PROCESS?
+│
+├─ STRUCTURE → Angular
+│   ├─ Is it bounded/finite? → Pure Angular
+│   └─ Does it transform?    → Hybrid (angular-base)
+│
+├─ PROCESS → Curved
+│   ├─ Is it continuous/flowing? → Pure Curved
+│   └─ Does it have fixed form?  → Hybrid (curved-base)
+│
+└─ BOTH EQUALLY → Hybrid
+    └─ Which aspect is more fundamental?
+        ├─ Structure → Angular-base hybrid
+        └─ Process   → Curved-base hybrid
+```
+
+### 4.6 Angular-Curved Ratio as Metadata
+
+Every glyph carries an AC-ratio (Angular-Curved ratio) as metadata:
+
+| AC-Ratio | Classification | Interpretation |
+|----------|---------------|----------------|
+| 1.00 | Pure Angular | Fully structural/logical |
+| 0.75 | Angular-dominant Hybrid | Mostly structural, some flow |
+| 0.50 | Balanced Hybrid | Equal structure and process |
+| 0.25 | Curved-dominant Hybrid | Mostly processual, some structure |
+| 0.00 | Pure Curved | Fully organic/flowing |
 
 ---
 
 ## 5. Movement & Relationship Glyphs
 
-Movement glyphs encode the *dynamics* between entities — they are the verbs of the QRrune
-language. Relationship glyphs encode *structural bonds* — the prepositions and conjunctions.
+Movement and relationship glyphs encode verbs, transitions, connections, and spatial/temporal
+dynamics — the grammar of the glyph language.
 
-### 5.1 Movement Glyph Taxonomy
+### 5.1 Movement Glyph Categories
 
-```
-MOVEMENT GLYPHS
-═══════════════════════════════════════════
-
-Directional Flow:
-  MOV-01 │ →   Propagate forward (event emission)
-  MOV-02 │ ←   Return / respond
-  MOV-03 │ ↑   Escalate / level-up
-  MOV-04 │ ↓   Cascade / delegate
-  MOV-05 │ ↔   Bidirectional sync
-  MOV-06 │ ↕   Full exchange (request + response)
-  MOV-07 │ ↻   Recycle / GC
-  MOV-08 │ ↯   Interrupt / force stop
-
-Transformation:
-  MOV-09 │ ⇒   Transform (input → output)
-  MOV-10 │ ⇔   Fuse (merge two into one)
-  MOV-11 │ ⇒⇒  Pipeline (multi-stage)
-  MOV-12 │ ⊃   Absorb (incorporate)
-  MOV-13 │ ⊂   Spawn from (derive)
-
-State Transitions:
-  MOV-14 │ ○→● Active (pending → running)
-  MOV-15 │ ●→✓ Complete (running → done)
-  MOV-16 │ ●→✗ Fail (running → error)
-  MOV-17 │ ✗→○ Retry (error → pending)
-```
-
-### 5.2 Relationship Glyph Taxonomy
+#### 5.1.1 Directional Movement
 
 ```
-RELATIONSHIP GLYPHS
-═══════════════════════════════════════════
+DIRECTIONAL PRIMITIVES
+═══════════════════════
 
-Structural:
-  REL-01 │ ─── Peer (equal connection)
-  REL-02 │ ═══ Strong bond (high trust)
-  REL-03 │ ··· Weak bond (low trust / candidate)
-  REL-04 │ ─┬─ Branch (one-to-many)
-  REL-05 │ ─┴─ Merge (many-to-one)
-  REL-06 │ ─╫─ Cross-link (graph edge)
+Cardinal:
+  MOV-N  │ Ascent / upward         ↑  Growth, promotion, emergence
+  MOV-S  │ Descent / downward      ↓  Gravity, decline, grounding
+  MOV-E  │ Forward / advance       →  Progress, future, output
+  MOV-W  │ Backward / retreat      ←  Memory, past, input
 
-Temporal:
-  REL-07 │ ⟶   Precedes (A before B)
-  REL-08 │ ⟵   Follows from (B after A)
-  REL-09 │ ∥   Concurrent (A ∥ B)
-  REL-10 │ ⊏   Contained within (A ⊂ B timeline)
+Diagonal:
+  MOV-NE │ Ascent-forward          ↗  Aspiration, optimization
+  MOV-NW │ Ascent-backward         ↖  Reflection-growth, nostalgia
+  MOV-SE │ Descent-forward         ↘  Entropy, delegation, release
+  MOV-SW │ Descent-backward        ↙  Deep memory, archaeology
 
-Semantic:
-  REL-11 │ ≡   Equivalent (same meaning, different form)
-  REL-12 │ ≈   Similar (related meaning)
-  REL-13 │ ≠   Contrast (opposite domain)
-  REL-14 │ ⊕   Complement (A + B = whole)
-  REL-15 │ ⊖   Deficit (A without B)
+Axial:
+  MOV-IO │ Inward                  ⊙  Focus, compression, internalize
+  MOV-OI │ Outward                 ⊕  Broadcast, expansion, externalize
+  MOV-CW │ Clockwise rotation      ↻  Natural cycle, forward-time
+  MOV-CC │ Counter-clockwise       ↺  Reverse, undo, anti-pattern
 ```
 
-### 5.3 Compound Movement Expressions
+#### 5.1.2 Velocity & Manner
 
-Movement and relationship glyphs can be chained into expressions:
+| Modifier | Symbol | Meaning | Application |
+|----------|--------|---------|-------------|
+| VEL-STILL | ◇ | Stationary / at rest | Meditation, storage, equilibrium |
+| VEL-DRIFT | ◇~ | Slow, ambient movement | Diffusion, passive spread |
+| VEL-WALK | ◇~~ | Steady, deliberate pace | Normal processing, routine |
+| VEL-RUSH | ◇~~~ | Rapid, urgent movement | Priority routing, emergency |
+| VEL-FLASH | ◇⚡ | Instantaneous | Interrupt, quantum-hop, cache-hit |
+| MNR-SMOOTH | ≈ | Continuous, uninterrupted | Stream, flow, pipeline |
+| MNR-PULSE | ⋮ | Rhythmic, periodic | Heartbeat, polling, cron |
+| MNR-STAGGER | ⋰ | Irregular, bursty | Event-driven, sporadic |
+| MNR-SPIRAL | @ | Helical, returning-but-advancing | Learning loops, recursive refinement |
+
+#### 5.1.3 Transformation Movement
 
 ```
-EXAMPLE: Agent A routes an event to Agent B which transforms it:
-  [A] →REL-01→ [B] ⇒ [output]
+TRANSFORMATION PRIMITIVES
+══════════════════════════
 
-EXAMPLE: Trust propagation through mesh:
-  [Node-X] ═══ [Node-Y] ↑ trust(+0.3)
+  TRN-BECOME │ ◇→◆  Metamorphosis (state A becomes state B)
+  TRN-SPLIT  │ ◆→◇◇ Fission (one becomes many)
+  TRN-MERGE  │ ◇◇→◆ Fusion (many become one)
+  TRN-CYCLE  │ ◇→◆→◇ Reversible transformation
+  TRN-SHED   │ ◆→◆' Shedding (entity persists, attribute lost)
+  TRN-ABSORB │ ◆+◇→◆⁺ Absorption (entity gains attribute)
+  TRN-DECAY  │ ◆→·  Dissolution (entity breaks to particles)
+  TRN-EMERGE │ ·→◆  Emergence (particles coalesce to entity)
+```
 
-EXAMPLE: Fusion of two runes:
-  [RuneAlpha] ⇔ [RuneBeta] ⇒ [RuneGamma]
+### 5.2 Relationship Glyph Categories
+
+#### 5.2.1 Structural Relationships
+
+| Glyph | Symbol | Meaning | Example |
+|-------|--------|---------|---------|
+| REL-PARENT | ┬ | Hierarchical parent | Class → subclass |
+| REL-CHILD | ┴ | Hierarchical child | Instance → class |
+| REL-SIBLING | ├┤ | Same-level peer | Co-workers, array elements |
+| REL-CONTAIN | ⊃ | Contains / encloses | Set membership, folder → file |
+| REL-WITHIN | ⊂ | Is contained by | Element → set |
+| REL-BRIDGE | ╌ | Connects across gap | API, translator, adapter |
+| REL-MIRROR | ⌐¬ | Reflects / duals | Encryption ↔ decryption |
+
+#### 5.2.2 Dynamic Relationships
+
+| Glyph | Symbol | Meaning | Example |
+|-------|--------|---------|---------|
+| REL-FEED | ≻ | Nourishes / supplies | Data source → processor |
+| REL-DRAIN | ≺ | Consumes / depletes | Sink, garbage collector |
+| REL-SYMBIOSIS | ∞ | Mutual benefit loop | Agent cooperation |
+| REL-PARASITE | ⊁ | One-sided drain | Resource leak, bloatware |
+| REL-COMPETE | ⊗ | Contention for shared resource | Lock contention, race condition |
+| REL-GUARD | ⊡ | Protects / shields | Firewall, validator |
+| REL-OBSERVE | ◎ | Watches without affecting | Logger, monitor, readonly |
+
+#### 5.2.3 Temporal Relationships
+
+| Glyph | Symbol | Meaning | Example |
+|-------|--------|---------|---------|
+| TMP-BEFORE | ◁ | Precedes in time | Prerequisite, cause |
+| TMP-AFTER | ▷ | Follows in time | Consequence, effect |
+| TMP-DURING | ◁▷ | Co-temporal / simultaneous | Parallel execution |
+| TMP-UNTIL | ◁⊣ | Persists until condition | Timeout, await, watch |
+| TMP-SINCE | ⊢▷ | Active from a point | Uptime, session start |
+| TMP-EPOCH | ⊢⊣ | Bounded time window | Transaction, scope |
+| TMP-ETERNAL | ○ | No temporal bound | Constant, axiom, law |
+
+### 5.3 Composing Movement + Relationship
+
+Movement and relationship glyphs combine to form verb phrases:
+
+```
+COMPOSITION SYNTAX:
+  [SUBJECT] + [RELATIONSHIP] + [MOVEMENT] + [OBJECT]
+
+EXAMPLES:
+
+  "Agent feeds data upstream"
+  ◆agent + REL-FEED(≻) + MOV-N(↑) + ◆data
+  Rendered: ◆≻↑◆
+
+  "Knowledge merges and spirals into understanding"
+  ◆knowledge + TRN-MERGE(◇◇→◆) + MNR-SPIRAL(@) + ◆understanding
+  Rendered: ◇◇→◆@◆
+
+  "Guardian observes the boundary eternally"
+  ◆guardian + REL-OBSERVE(◎) + REL-GUARD(⊡) + TMP-ETERNAL(○)
+  Rendered: ◆◎⊡○
 ```
 
 ---
 
 ## 6. World-Entity Ontology
 
-The World-Entity Ontology defines the fundamental categories of *things that exist* in the
-QRrune universe. Every glyph that refers to a real-world or system concept must be anchored to
-an ontological class.
+The World-Entity Ontology defines the ten primordial domains of the natural world. Every
+concept in QRrune can trace at least one root to these domains — they are the ground-truth
+metaphors from which all meaning grows.
 
-### 6.1 Ontological Hierarchy
+### 6.1 The Ten Domains
 
 ```
-WORLD-ENTITY TREE
-═══════════════════════════════════════════
+THE WORLD WHEEL
+═══════════════════════════════════════════════════
+                       🌬 WIND
+                    · · · · ·
+               🔥 FIRE         💧 WATER
+             · ·
+         🌸 FLOWERS     🌿 VINES
+           · ·
+         🍄 FUNGI    ◎ CORE    🐛 BUGS
+           · ·
+         🌍 SOIL       🐦 BIRDS
+             · ·
+               🌳 TREES · · ·
+                    · · · ·
 
-ROOT: EXISTENCE (∃)
-├── AGENT          — any autonomous acting entity
-│   ├── human
-│   ├── ai-agent
-│   ├── daemon
-│   └── collective
-├── NODE           — any network-addressable location
-│   ├── compute-node
-│   ├── storage-node
-│   ├── edge-node
-│   └── caern-node
-├── ARTIFACT       — any produced or storable object
-│   ├── glyph
-│   ├── rune
-│   ├── strategy
-│   ├── checkpoint
-│   └── symbol
-├── PROCESS        — any ongoing dynamic
-│   ├── event
-│   ├── task
-│   ├── workflow
-│   └── tick
-├── RELATIONSHIP   — any bond between entities
-│   ├── trust-bond
-│   ├── peer-link
-│   ├── parent-child
-│   └── fusion
-└── CONCEPT        — any abstract idea
-    ├── knowledge
-    ├── intent
-    ├── domain
-    └── pattern
+  The domains form a wheel — adjacent domains share
+  affinity; opposite domains create tension/contrast.
+═══════════════════════════════════════════════════
 ```
 
-### 6.2 Entity Radicals
+### 6.2 Domain Definitions
 
-Each ontological class has a canonical determinative radical used as a prefix:
+| # | Domain | Radical | Element | Semantic Core | Glyph Class |
+|---|--------|---------|---------|---------------|-------------|
+| 1 | Trees | 🜁 | Wood | Structure, permanence, branching hierarchy, sheltering | Angular-dominant |
+| 2 | Bugs | 🜂 | Chitin | Industriousness, swarm intelligence, persistence, modularity | Hybrid |
+| 3 | Birds | 🜃 | Air-bone | Vision, freedom, migration, song, messenger patterns | Curved-dominant |
+| 4 | Fungi | 🜄 | Mycelium | Hidden networks, decomposition, recycling, symbiosis | Curved |
+| 5 | Vines | 🜅 | Tendril | Connection, climbing, binding, parasitism, adaptation | Hybrid |
+| 6 | Flowers | 🜆 | Petal | Beauty, signaling, reproduction, attraction, ephemera | Curved |
+| 7 | Soil | 🜇 | Earth | Foundation, memory, decay-into-renewal, substrate | Angular |
+| 8 | Water | 🜈 | Fluid | Flow, purification, erosion, depth, reflection | Curved |
+| 9 | Fire | 🜉 | Plasma | Transformation, energy, destruction-creation, urgency | Hybrid |
+| 10 | Wind | 🜊 | Gas | Invisibility, force, breath, communication, dispersal | Curved |
 
-| Class | Radical | Code | Visual Form |
-|-------|---------|------|-------------|
-| AGENT | ◈ | ENT-AG | Diamond with inner cross |
-| NODE  | ⬡ | ENT-ND | Hexagon |
-| ARTIFACT | ⬜ | ENT-AF | Square |
-| PROCESS | ◁▷ | ENT-PR | Double chevron |
-| RELATIONSHIP | ─◎─ | ENT-RL | Circle on wire |
-| CONCEPT | ☁ | ENT-CO | Cloud |
+### 6.3 Domain Affinities & Tensions
 
-### 6.3 Entity Properties
-
-All entities carry a standard property envelope:
-
-```json
-{
-  "id":        "string (UUID)",
-  "class":     "AGENT | NODE | ARTIFACT | PROCESS | RELATIONSHIP | CONCEPT",
-  "label":     "string",
-  "trust":     "float [0.0–1.0]",
-  "active":    "boolean",
-  "created_at":"ISO-8601",
-  "layer":     "string (ontological layer name)",
-  "glyphs":    ["glyph-id", ...]
-}
 ```
+AFFINITY MATRIX (adjacent = affinity, opposite = tension)
+══════════════════════════════════════════════════════════
+
+         TREE BUG BIRD FUNG VINE FLOW SOIL WATR FIRE WIND
+  TREE ──  +   ·   +    +   ·    +   ·    ─   ·
+  BUG   +  ──  ─   +    ·   +    +   ·    ·   ·
+  BIRD  ·  ─  ──   ·    ·   ·    ·   ·    ·   +
+  FUNG  +  +   ·  ──    +   ·    +   +    ─   ·
+  VINE  +  ·   ·   +   ──   +    ·   +    ·   ·
+  FLOW  ·  +   ·   ·    +  ──    ·   +    ─   +
+  SOIL  +  +   ·   +    ·   ·   ──   +    +   ─
+  WATR  ·  ·   ·   +    +   +    +  ──    ─   +
+  FIRE  ─  ·   ·   ─    ·   ─    +   ─   ──   +
+  WIND  ·  ·   +   ·    ·   +    ─   +    +  ──
+
+  Key: + affinity   ─ tension   · neutral
+```
+
+### 6.4 Ontological Mapping to Computing Concepts
+
+| Domain | Computing Metaphor | Agent Application |
+|--------|--------------------|-------------------|
+| Trees | File systems, ASTs, DOM trees, class hierarchies | Structure agent, parser, indexer |
+| Bugs | Microservices, worker threads, task queues | Swarm workers, batch processors |
+| Birds | Message brokers, observers, event dispatchers | Messenger agent, notification system |
+| Fungi | Distributed caches, gossip protocols, shared state | Mycelium router, consensus layer |
+| Vines | Dependency injection, middleware chains, plugins | Plugin manager, adapter layer |
+| Flowers | UI components, API surfaces, documentation | Interface agent, presentation layer |
+| Soil | Databases, persistent storage, archive | Memory agent, long-term storage |
+| Water | Streams, pipelines, ETL flows | Data pipeline, transform agent |
+| Fire | Compilers, optimizers, garbage collectors | Forge agent, optimizer, purifier |
+| Wind | Network I/O, broadcast, pub/sub | Network agent, broadcast system |
+
+### 6.5 Entity Radical Construction
+
+Each domain contributes a determinative radical used to prefix glyphs:
+
+```
+DOMAIN RADICALS — CONSTRUCTION RULES
+═════════════════════════════════════
+
+  🜁 TREE radical:  ┃ with branching fork ┣
+     Strokes: ANG-01 + ANG-06  (2 strokes, angular)
+     Position: top-left determinative cell
+
+  🜂 BUG radical:   ╳ with legs ╪
+     Strokes: ANG-10 + ANG-02  (2 strokes, hybrid)
+     Position: top-left determinative cell
+
+  🜃 BIRD radical:  ∧ with trailing arc ∧~
+     Strokes: ANG-07 + CRV-01  (2 strokes, curved-lean)
+     Position: top-left determinative cell
+
+  🜄 FUNGI radical: ◠ with descending threads ◠┊
+     Strokes: CRV-02 + ANG-01×n  (variable, curved)
+     Position: top-left determinative cell
+
+  🜅 VINE radical:  ~ with anchor point ~•
+     Strokes: CRV-01 + WDG-05  (2 strokes, hybrid)
+     Position: top-left determinative cell
+
+  🜆 FLOWER radical: ✿ simplified to ◎ with petals
+     Strokes: CRV-03 + CRV-04×4  (5 strokes, curved)
+     Position: top-left determinative cell
+
+  🜇 SOIL radical:  ═ with texture dots ═·
+     Strokes: GRD-02 + WDG-05  (2 strokes, angular)
+     Position: top-left determinative cell
+
+  🜈 WATER radical: ≈ double wave
+     Strokes: CRV-01×2  (2 strokes, curved)
+     Position: top-left determinative cell
+
+  🜉 FIRE radical:  ∧ with interior flicker ∧̃
+     Strokes: ANG-07 + CRV-01  (2 strokes, hybrid)
+     Position: top-left determinative cell
+
+  🜊 WIND radical:  ))) triple arc stream
+     Strokes: CRV-02×3  (3 strokes, curved)
+     Position: top-left determinative cell
+```
+
+### 6.6 Cross-Domain Compound Entities
+
+When a concept spans two domains, compound radicals are formed:
+
+| Compound | Domains | Meaning | Example |
+|----------|---------|---------|---------|
+| 🜁+🜄 | Tree+Fungi | Symbiotic partnership | Mycorrhizal network |
+| 🜈+🜉 | Water+Fire | Phase transformation | Steam, evaporation |
+| 🜊+🜃 | Wind+Bird | Long-distance message | Network broadcast |
+| 🜇+🜆 | Soil+Flower | Grounded beauty | Reliable UI |
+| 🜂+🜅 | Bug+Vine | Parasitic dependency | Circular dependency |
+| 🜈+🜇 | Water+Soil | Erosive memory | Cache invalidation |
+| 🜉+🜁 | Fire+Tree | Destructive renewal | Refactoring |
+| 🜄+🜊 | Fungi+Wind | Invisible dispersal | Gossip protocol |
 
 ---
 
 ## 7. Icelandic Morphology Layer
 
-The Icelandic morphology layer contributes principles of **grammatical case** and **declension**
-to the QRrune encoding system. Icelandic is one of the most morphologically conservative of all
-living Germanic languages, preserving a four-case system that maps naturally onto the semantic
-roles that glyphs can play in a sentence.
+Icelandic is the most conservative living Germanic language — its morphological richness
+provides a model for glyph inflection, case-marking, and compositional semantics in QRrune.
 
-### 7.1 Case Mapping
+### 7.1 Why Icelandic?
 
-| Icelandic Case | Grammatical Role | QRrune Application |
-|----------------|-----------------|-------------------|
-| Nominative | Subject — who acts | The emitting agent of an event |
-| Accusative | Direct object — what is acted upon | The payload or target entity |
-| Dative | Indirect object — who benefits | The receiving agent or node |
-| Genitive | Possession / origin | The source layer or owning namespace |
+| Property | Icelandic Feature | QRrune Extraction |
+|----------|------------------|-------------------|
+| Case System | 4 cases (nominative, accusative, dative, genitive) | Glyphs inflect by role: agent, patient, instrument, possessor |
+| Declension | Strong/weak paradigms, gender agreement | Glyph variant classes with systematic suffix patterns |
+| Compounding | Agglutinative compounds (e.g., tölvunarfræði = computer science) | Multi-radical compound glyph construction |
+| Vowel Shifts | Umlaut (i-mutation, u-mutation) | Internal radical modification for semantic shifts |
+| Preservation | Minimal drift from Old Norse | Long-term stability guarantee for glyph meanings |
 
-### 7.2 Case Diacritics
+### 7.2 Case-Role Mapping
 
-Each glyph can be inflected by appending a case diacritic:
-
-```
-CASE DIACRITICS
-═══════════════════════════════════════════
-  NOM (nominative) │ ˊ   (acute accent, upper-right)
-  ACC (accusative) │ ˋ   (grave accent, upper-left)
-  DAT (dative)     │ ˆ   (circumflex, top-center)
-  GEN (genitive)   │ ˜   (tilde, top-center, wavy)
-```
-
-### 7.3 Icelandic Morphological Radicals
-
-Icelandic provides a set of functional morphemes mapped to QRrune function radicals:
-
-| Morpheme | Meaning | Radical |
-|----------|---------|---------|
-| -inn / -in | The definite article (the X) | DEF ▐ |
-| -legur | Adjectival suffix (-like, -ful) | ADJ ∼ |
-| -semi | Abstract noun (quality, -ness) | NOM ○ |
-| -næni | Sensitivity, receptiveness | RCP ⊾ |
-| -skapur | State, condition | STA ≡ |
-| veita | To grant, bestow | GRT → |
-| geyma | To store, keep | STR ⊡ |
-| senda | To send, transmit | SND ⟶ |
-
-### 7.4 Compound Morphological Expressions
+QRrune adopts a four-case inflection system mirroring Icelandic grammar:
 
 ```
-EXAMPLE: "The trusted node" (nominative)
-  [ENT-ND] [TRS: high] [DEF ▐] ˊ
-  = hexagon + strong-trust-radical + definite-article + nominative
+CASE INFLECTION TABLE
+═════════════════════
 
-EXAMPLE: "Sending to the receiving agent" (dative)
-  [SND] [ENT-AG] [RCP] ˆ
-  = send-radical + agent + receptive-radical + dative-mark
+  NOMINATIVE (nefnifall)  → AGENT role
+    Suffix: -∅  (unmarked, base form)
+    Meaning: "the one who acts"
+    Example: ◆fire  (fire as subject/actor)
+
+  ACCUSATIVE (þolfall)    → PATIENT role
+    Suffix: -╴  (right tick)
+    Meaning: "the one acted upon"
+    Example: ◆fire╴  (fire as object/target)
+
+  DATIVE (þágufall)       → INSTRUMENT role
+    Suffix: -╶  (left tick)
+    Meaning: "by means of / affected by"
+    Example: ◆fire╶  (by means of fire / fire-affected)
+
+  GENITIVE (eignarfall)   → POSSESSOR role
+    Suffix: -╷  (bottom tick)
+    Meaning: "belonging to / of the nature of"
+    Example: ◆fire╷  (of fire / fire's quality)
 ```
+
+### 7.3 Declension Classes
+
+Glyphs are organized into three declension classes modeled on Icelandic strong/weak paradigms:
+
+| Class | Name | Pattern | Applies To |
+|-------|------|---------|-----------|
+| I | Strong (sterk) | Full case distinction, all four suffixes unique | Core domain entities (tree, fire, water, etc.) |
+| II | Weak (veik) | Reduced case distinction, accusative = dative | Abstract concepts (truth, beauty, logic) |
+| III | Invariant (óbeygjanleg) | No inflection, context determines role | Universal constants, operators, punctuation |
+
+### 7.4 Compound Formation Rules
+
+Icelandic-style compounding allows glyphs to form complex meanings:
+
+```
+COMPOUND FORMATION
+══════════════════
+
+Type 1: HEAD-MODIFIER (determinative)
+  Structure: [modifier] + [head]
+  Head carries inflection; modifier is bare stem
+  Example: ◆water + ◆tree = ◆water·tree  (water-tree = willow)
+
+Type 2: DVANDVA (coordinative)
+  Structure: [element-A] + [element-B]  (co-equal)
+  Both elements share inflection
+  Example: ◆fire + ◆water = ◆fire∧water  (fire-and-water = steam)
+
+Type 3: BAHUVRIHI (possessive/exocentric)
+  Structure: [attribute] + [possessor-marker]
+  Compound refers to entity POSSESSING the attribute
+  Example: ◆strong + ◆root╷ = "the strong-rooted one"
+
+Type 4: CHAIN COMPOUND (agglutinative)
+  Structure: [A] + [B] + [C] + ...  (up to 4 elements)
+  Only final element carries inflection
+  Example: ◆soil·fungi·vine·network = "mycorrhizal vine network"
+```
+
+### 7.5 Umlaut — Internal Radical Modification
+
+Borrowing from Icelandic i-umlaut and u-umlaut, QRrune defines radical mutation as a mechanism
+for systematic semantic shifts:
+
+| Mutation Type | Trigger | Effect on Radical | Semantic Shift |
+|--------------|---------|-------------------|----------------|
+| i-mutation | Diminutive / refinement | Curves tighten, scale reduces | General → specific |
+| u-mutation | Augmentative / expansion | Curves widen, scale increases | Specific → general |
+| a-mutation | Historicizing / archaic | Strokes simplify toward angular | Current → ancestral |
+| ö-mutation | Alienation / othering | Strokes mirror horizontally | Familiar → foreign |
+
+```
+EXAMPLE: i-mutation of TREE radical
+────────────────────────────────────
+  Base:        ┃┣  (full tree radical)
+  i-mutated:   ┃┤  (smaller fork = specific tree, sapling, branch)
+
+  "tree" → "branch" via i-mutation
+```
+
+### 7.6 Number & Definiteness
+
+| Feature | Singular | Plural | Dual (optional) |
+|---------|----------|--------|-----------------|
+| Marker | -∅ (unmarked) | -═ (double bar) | -┃┃ (twin bars) |
+| Meaning | One instance | Multiple instances | Exactly two / paired |
+| Example | ◆bird | ◆bird═ | ◆bird┃┃ |
+
+| Feature | Indefinite | Definite |
+|---------|-----------|----------|
+| Marker | -∅ (unmarked) | -▪ (filled square suffix) |
+| Meaning | "a/any" entity | "the/this specific" entity |
+| Example | ◆tree (a tree) | ◆tree▪ (the tree) |
 
 ---
 
 ## 8. Old Norse Runic Morphology
 
-Old Norse runes are the visual and phonological spine of the QRrune glyph aesthetic. The Elder
-Futhark (24 runes) and Younger Futhark (16 runes) contribute both stroke forms and semantic
-resonance.
+The Elder Futhark and Younger Futhark rune systems encode a phonetic-symbolic duality —
+each rune is simultaneously a sound, a name, and a cosmic concept. QRrune extracts this
+triadic encoding principle.
 
-### 8.1 Elder Futhark Mappings
+### 8.1 Runic Design Principles
 
-The 24 Elder Futhark runes are mapped to QRrune semantic domains, not phonemes:
+| Runic Principle | Historical Function | QRrune Adaptation |
+|----------------|--------------------|--------------------|
+| Triadic Identity | Each rune = sound + name + concept (e.g., ᚠ = /f/ + fehu + "wealth/cattle") | Each radical = stroke + label + semantic domain |
+| Stave Construction | Vertical stave (┃) with branches; carving-optimized (no horizontal on wood grain) | Vertical primary axis; strokes favor diagonals for discriminability |
+| Aettir Grouping | 24 runes ÷ 3 families of 8 (Freyr's, Hagal's, Tyr's) | Radical families grouped by ontological domain |
+| Bind Runes | Overlapping runes share staves to form compound signs | Radical fusion — shared strokes reduce total stroke count |
+| Inversions | Reversed/inverted runes carry altered or opposite meaning | Mirrored radicals encode negation or inversion |
+| Magical Intention | Runes carved with purpose activate meaning | Glyph activation metadata — dormant vs active state |
 
-| Rune | Name | Traditional Meaning | QRrune Domain |
-|------|------|--------------------|--------------------|
-| ᚠ | Fehu | Cattle, wealth | Resources, assets |
-| ᚢ | Uruz | Aurochs, strength | Raw compute power |
-| ᚦ | Thurisaz | Giant, thorn | Threat, defense |
-| ᚨ | Ansuz | God, mouth | Communication, LLM |
-| ᚱ | Raidho | Journey, wheel | Routing, mesh traversal |
-| ᚲ | Kenaz | Torch, knowledge | Illumination, search |
-| ᚷ | Gebo | Gift, exchange | Mutual trust, fusion |
-| ᚹ | Wunjo | Joy, clan | Harmony, consensus |
-| ᚺ | Hagalaz | Hail, disruption | Chaos, GC event |
-| ᚾ | Nauthiz | Need, necessity | Constraint, dependency |
-| ᛁ | Isa | Ice, stillness | Frozen state, lock |
-| ᛃ | Jera | Year, harvest | Cycle complete, reward |
-| ᛇ | Eihwaz | Yew tree, axis | Core connection, spine |
-| ᛈ | Perthro | Lot-cup, mystery | Entropy, randomness |
-| ᛉ | Algiz | Elk-sedge, protection | Shield, audit trail |
-| ᛊ | Sowilo | Sun, victory | Success, trust peak |
-| ᛏ | Tiwaz | Tyr, justice | Governance, protocol |
-| ᛒ | Berkano | Birch, growth | Spawn, creation |
-| ᛖ | Ehwaz | Horse, partnership | Peer bond, cooperation |
-| ᛗ | Mannaz | Man, self | Agent identity |
-| ᛚ | Laguz | Water, flow | Data stream, event flow |
-| ᛜ | Ingwaz | Ing, completeness | Encapsulation, closure |
-| ᛞ | Dagaz | Day, breakthrough | Transformation, dawn event |
-| ᛟ | Othala | Estate, heritage | Lineage, provenance |
+### 8.2 Aettir-Inspired Radical Families
 
-### 8.2 Bindrune Construction
-
-Bindrunes overlay two or more runes into a single composite symbol. QRrune adopts this for
-creating **compound glyphs** that express relationships between two domains:
+QRrune organizes radicals into three aettir (families), each governing a domain of experience:
 
 ```
-BINDRUNE RULES:
-  1. Primary rune forms the vertical spine
-  2. Secondary rune shares the spine stroke
-  3. Resulting glyph is assigned a new Radical code
-  4. Maximum 3 runes per bindrune
-  5. Shared strokes are rendered at bold weight
+FIRST AETT — CREATION & SUBSTANCE (Freyr's Aett analog)
+═══════════════════════════════════════════════════════
+  Governs: Material world, resources, beginnings, primal forces
+
+  Radical │ Name          │ Domain          │ Stroke
+  ────────┼───────────────┼─────────────────┼──────────
+  R-01    │ Fé (wealth)   │ Resource        │ ┣╲
+  R-02    │ Úr (rain)     │ Primal force    │ ┃╲╱
+  R-03    │ Þurs (giant)  │ Chaos/entropy   │ ┣>
+  R-04    │ Áss (god)     │ Authority       │ ┣╱
+  R-05    │ Reið (ride)   │ Journey         │ ┣>╲
+  R-06    │ Kaun (sore)   │ Vulnerability   │ ┃<
+  R-07    │ Gjöf (gift)   │ Exchange        │ ╳┃
+  R-08    │ Vend (joy)    │ Fulfillment     │ ┣╱╲
+
+SECOND AETT — DISRUPTION & TRANSFORMATION (Hagal's Aett analog)
+══════════════════════════════════════════════════════════════════
+  Governs: Weather, fate, constraint, necessity, transformation
+
+  Radical │ Name          │ Domain          │ Stroke
+  ────────┼───────────────┼─────────────────┼──────────
+  R-09    │ Hagall (hail) │ Disruption      │ ╬
+  R-10    │ Nauð (need)   │ Constraint      │ ┃╲┃
+  R-11    │ Ís (ice)      │ Stillness       │ ┃
+  R-12    │ Ár (harvest)  │ Cycle/reward    │ ┃╱╲╱
+  R-13    │ Sól (sun)     │ Energy/light    │ ╲╱╲
+  R-14    │ Týr (Tyr)     │ Justice/order   │ ↑┃
+  R-15    │ Björk (birch) │ Growth/renewal  │ ┣>┣>
+  R-16    │ Maðr (human)  │ Self/identity   │ ┃╱╲┃
+
+THIRD AETT — CONSCIOUSNESS & COMPLETION (Tyr's Aett analog)
+════════════════════════════════════════════════════════════════
+  Governs: Mind, communication, completion, transcendence
+
+  Radical │ Name          │ Domain          │ Stroke
+  ────────┼───────────────┼─────────────────┼──────────
+  R-17    │ Lögr (water)  │ Flow/depth      │ ┃╲
+  R-18    │ Yr (yew)      │ Persistence     │ ┃╱╲┃╱
+  R-19    │ Algiz (elk)   │ Protection      │ ┃↑╱╲
+  R-20    │ Dagr (day)    │ Clarity         │ ╳═
+  R-21    │ Óðal (home)   │ Belonging       │ ◇┃
+  R-22    │ Ing (seed)    │ Potential       │ ◇
+  R-23    │ Erda (earth)  │ Foundation      │ ═┃═
+  R-24    │ Wyrd (fate)   │ Destiny/weave   │ ┃╳┃
 ```
 
-### 8.3 Runic Aett Structure
+### 8.3 Bind-Rune Fusion Rules
 
-The Elder Futhark is divided into three Aettir (families of 8). QRrune maps each Aett to a
-cognitive layer:
+When two or more radicals combine, they follow bind-rune fusion — shared structural elements
+merge:
 
-| Aett | Runes | Cognitive Layer |
-|------|-------|-----------------|
-| Freyr's Aett (ᚠ–ᚹ) | Fehu→Wunjo | Physical/resource layer |
-| Heimdall's Aett (ᚺ–ᛇ) | Hagalaz→Eihwaz | Process/dynamic layer |
-| Tyr's Aett (ᛈ–ᛟ) | Perthro→Othala | Abstract/cognitive layer |
+```
+BIND-RUNE FUSION ALGORITHM
+═══════════════════════════
+
+Step 1: IDENTIFY SHARED STAVES
+  If both radicals contain a vertical stave (┃), merge into one stave.
+
+Step 2: ARRANGE BRANCHES
+  Left branches from radical-A stay left.
+  Right branches from radical-B stay right.
+  If both have branches on the same side:
+    → Stack vertically (A-branch above B-branch)
+
+Step 3: COLLISION RESOLUTION
+  If merged glyph exceeds 7 total strokes:
+    → Simplify the less-dominant radical (fewer semantic features)
+    → Minimum: retain 2 strokes per radical
+
+Step 4: REGISTER FUSION
+  The resulting bind-glyph is logged with its component IDs
+  for deterministic decoding.
+
+EXAMPLE: Fé (┣╲) + Nauð (┃╲┃) → Bind: ┣╲┃
+  Shared: ┃ (vertical stave) → merged
+  Result: wealth-constrained = "scarcity" or "budgeted resource"
+```
+
+### 8.4 Inversion Semantics
+
+| Operation | Visual Effect | Semantic Effect |
+|-----------|--------------|-----------------|
+| Horizontal Mirror | Left ↔ Right | Negation / opposite meaning |
+| Vertical Mirror | Top ↔ Bottom | Inversion of hierarchy (root ↔ crown) |
+| 180° Rotation | Full flip | Reversal of process direction |
+| Stave Removal | Delete the central ┃ | Abstract the concept (remove grounding) |
+
+```
+EXAMPLE:
+  R-14 Týr (↑┃) = justice, order, lawful authority
+
+  Horizontal mirror: (┃↑ reflected) = injustice, disorder
+  Vertical mirror:   (↓┃)           = submission, yielding
+  180° rotation:     (┃↓)           = fallen authority, exile
+  Stave removal:     (↑)            = abstract ideal of justice (platonic)
+```
+
+### 8.5 Activation States
+
+Inspired by the Norse concept of runes being activated through carving with intention:
+
+| State | Marker | Meaning |
+|-------|--------|---------|
+| Dormant | No marker | Glyph exists but is not currently active/relevant |
+| Awakened | Single dot above (˙) | Glyph is loaded in working memory |
+| Charged | Double dot above (¨) | Glyph is actively being processed/transformed |
+| Released | Ring above (°) | Glyph has completed its purpose, results emitted |
+| Sealed | Bar above (¯) | Glyph is locked — cannot be modified or decoded |
 
 ---
 
 ## 9. Chinese Radical Logic
 
-The Chinese writing system achieves remarkable information density through a compositional
-radical system. QRrune borrows the structural logic — not the characters themselves — to
-organize semantic fields.
+Chinese characters achieve extraordinary semantic density through radical composition — a
+small set of meaning-carrying components combine in predictable positions to generate
+thousands of characters. QRrune adopts this architectural genius as its primary composability
+engine.
 
-### 9.1 Radical Classification Principles
+### 9.1 Principles Extracted from Chinese Radicals
 
-Chinese radicals are classified by:
-1. **Semantic contribution** — the radical hints at meaning
-2. **Phonetic contribution** — (not used in QRrune; we are purely semantic)
-3. **Positional role** — left component, top component, enclosure, etc.
+| Chinese Principle | Description | QRrune Application |
+|-------------------|------------|-------------------|
+| Radical + Phonetic | Semantic radical hints at meaning; phonetic component hints at pronunciation | Domain radical (meaning) + modifier radical (specification) |
+| Positional Semantics | Radical position matters: left = category, right = specifics; top = abstract, bottom = concrete | 2×2 grid with positional meaning (§9.3) |
+| Radical Reuse | ~214 radicals generate 50,000+ characters | ~60 core radicals generate unbounded glyph space |
+| Stroke Order | Canonical stroke order ensures consistency and aids recall | Deterministic construction order ensures machine reproducibility |
+| Semantic Clustering | Characters sharing a radical share semantic affinity (氵water: 河 river, 湖 lake, 海 sea) | Glyphs sharing a domain radical cluster in semantic space |
+| Simplification | Complex → simplified forms for efficiency (龍 → 龙) | Formal → compact glyph variants for bandwidth optimization |
 
-QRrune maps these positions to the 2×2 glyph grid:
+### 9.2 Core Radical Inventory
 
-```
-GRID POSITION → SEMANTIC ROLE
-  ┌──────────┬──────────┐
-  │ TOP-LEFT │ TOP-RIGHT│
-  │ DOMAIN   │ MODIFIER │
-  │ (det.)   │ (qual.)  │
-  ├──────────┼──────────┤
-  │ BOT-LEFT │ BOT-RIGHT│
-  │ ACTION   │ OBJECT   │
-  │ (verb)   │ (noun)   │
-  └──────────┴──────────┘
-```
-
-### 9.2 QRrune Semantic Field Radicals
-
-Inspired by the 214 Kangxi radicals, QRrune defines a condensed set of 64 semantic field
-radicals organized in 8 rows of 8 (a nod to the I Ching's 64 hexagrams):
-
-| Row | Domain | Radicals |
-|-----|--------|---------|
-| 1 | Body / Self | agent, identity, memory, boundary, health, sense, will, persona |
-| 2 | Earth / Space | node, location, distance, path, region, ground, horizon, map |
-| 3 | Water / Flow | stream, pool, flood, drop, current, channel, source, delta |
-| 4 | Fire / Energy | spark, flame, heat, light, burn, radiate, consume, ignite |
-| 5 | Metal / Structure | frame, link, chain, lock, key, forge, alloy, gate |
-| 6 | Wood / Growth | seed, root, branch, leaf, fruit, cycle, decay, forest |
-| 7 | Time / Sequence | past, present, future, duration, instant, rhythm, epoch, era |
-| 8 | Mind / Abstract | know, forget, trust, doubt, plan, dream, symbol, void |
-
-### 9.3 Radical Combination Grammar
-
-When two semantic field radicals combine, the resulting meaning follows a compositional rule:
+QRrune defines 60 core radicals organized into six tiers of ten:
 
 ```
-SEMANTIC COMPOSITION:
-  [DOMAIN radical] + [ACTION radical] = activity within domain
-  [DOMAIN radical] + [OBJECT radical] = entity within domain
-  [MODIFIER radical] + [OBJECT radical] = qualified entity
-  [ACTION radical] + [OBJECT radical] = verb phrase
+TIER 1 — ELEMENTAL (from World Ontology domains)
+═════════════════════════════════════════════════
+  CR-01 Tree   │ CR-02 Bug    │ CR-03 Bird
+  CR-04 Fungi  │ CR-05 Vine   │ CR-06 Flower
+  CR-07 Soil   │ CR-08 Water  │ CR-09 Fire
+  CR-10 Wind
+
+TIER 2 — STRUCTURAL (from Angular domain)
+═════════════════════════════════════════════════
+  CR-11 Wall/Boundary   │ CR-12 Frame/Container
+  CR-13 Path/Channel    │ CR-14 Bridge/Span
+  CR-15 Gate/Threshold  │ CR-16 Tower/Stack
+  CR-17 Root/Foundation │ CR-18 Branch/Fork
+  CR-19 Grid/Matrix     │ CR-20 Knot/Junction
+
+TIER 3 — PROCESSUAL (from Curved domain)
+═════════════════════════════════════════════════
+  CR-21 Flow/Stream   │ CR-22 Spiral/Cycle
+  CR-23 Wave/Pulse    │ CR-24 Bloom/Expand
+  CR-25 Wilt/Contract │ CR-26 Merge/Converge
+  CR-27 Split/Diverge │ CR-28 Twist/Transform
+  CR-29 Echo/Resonate │ CR-30 Drift/Diffuse
+
+TIER 4 — COGNITIVE (from Brain model)
+═════════════════════════════════════════════════
+  CR-31 Perceive/Sense  │ CR-32 Remember/Store
+  CR-33 Decide/Choose   │ CR-34 Create/Generate
+  CR-35 Compare/Weigh   │ CR-36 Abstract/Distill
+  CR-37 Embody/Ground   │ CR-38 Dream/Imagine
+  CR-39 Focus/Attend    │ CR-40 Release/Forget
+
+TIER 5 — RELATIONAL (from Movement/Relationship)
+═════════════════════════════════════════════════
+  CR-41 Parent/Above   │ CR-42 Child/Below
+  CR-43 Sibling/Beside │ CR-44 Bond/Link
+  CR-45 Guard/Shield   │ CR-46 Feed/Nourish
+  CR-47 Compete/Clash  │ CR-48 Observe/Watch
+  CR-49 Carry/Transport│ CR-50 Anchor/Hold
+
+TIER 6 — META (system-level)
+═════════════════════════════════════════════════
+  CR-51 Agent/Self     │ CR-52 Message/Signal
+  CR-53 Rule/Law       │ CR-54 Error/Fault
+  CR-55 Time/Clock     │ CR-56 Space/Location
+  CR-57 Truth/Verified │ CR-58 Unknown/Query
+  CR-59 Null/Void      │ CR-60 Infinity/All
 ```
 
-**Examples:**
+### 9.3 Positional Grid Semantics
 
-| Combination | Result |
-|-------------|--------|
-| FLOW + LINK | Data stream routing |
-| MIND + CHAIN | Memory sequence |
-| FIRE + NODE | Active compute node |
-| TRUST + AGENT | Verified peer |
-| VOID + FUTURE | Unknown state ahead |
+The 2×2 glyph grid assigns semantic roles by position, mirroring Chinese radical placement:
+
+```
+POSITIONAL GRID
+═══════════════════════════════════════════
+  ┌────────────────┬────────────────┐
+  │   TOP-LEFT     │   TOP-RIGHT    │
+  │                │                │
+  │  DOMAIN        │  MODIFIER      │
+  │  (determinative│  (qualifier/   │
+  │   radical —    │   adjective —  │
+  │   classifies   │   refines the  │
+  │   the glyph)   │   core meaning)│
+  ├────────────────┼────────────────┤
+  │   BOT-LEFT     │   BOT-RIGHT    │
+  │                │                │
+  │  ACTION        │  OBJECT        │
+  │  (verb radical │  (noun radical │
+  │   — what is    │   — what is    │
+  │   happening)   │   involved)    │
+  └────────────────┴────────────────┘
+
+POSITION RULES:
+  1. TOP-LEFT is mandatory if a domain radical exists.
+  2. BOT-RIGHT is mandatory for entity glyphs.
+  3. TOP-RIGHT and BOT-LEFT are optional modifiers.
+  4. A glyph with only BOT-RIGHT = pure noun (unclassified entity).
+  5. A glyph with only BOT-LEFT = pure verb (unbound action).
+```
+
+### 9.4 Stroke Order Canon
+
+Deterministic stroke rendering order ensures identical output across all implementations:
+
+```
+CANONICAL STROKE ORDER
+═══════════════════════
+
+  1. Horizontal strokes — left to right
+  2. Vertical strokes — top to bottom
+  3. Diagonal strokes — upper-left to lower-right
+  4. Counter-diagonal — upper-right to lower-left
+  5. Enclosing strokes — top, then sides, then bottom
+  6. Interior strokes — after enclosure is open
+  7. Closing strokes — last (seal the enclosure)
+  8. Curved strokes — after all angular strokes in same cell
+  9. Diacritical marks — after all body strokes
+  10. Halo/AEL envelope — outermost, rendered last
+```
+
+### 9.5 Compact vs Formal Variants
+
+Every glyph that exceeds 5 total strokes has a compact variant for bandwidth-constrained
+contexts (e.g., mesh packet headers):
+
+| Variant | Stroke Budget | Use Context | Lossy? |
+|---------|--------------|-------------|--------|
+| Formal | Unlimited | Storage, display, audit | No |
+| Standard | ≤ 7 strokes | Normal operation | No |
+| Compact | ≤ 4 strokes | Mesh routing headers | Minor (modifier dropped) |
+| Token | 1–2 strokes | Ultra-low-bandwidth | Yes (domain only) |
 
 ---
 
