@@ -50,10 +50,12 @@ public:
     }
 
     /// Check whether a field has diverged beyond a corruption threshold.
+    /// A healthy field (outer(n,n) + damping·I for unit n) has Frobenius
+    /// norm ≈ 1.  Corruption is detected when the norm deviates from 1.0
+    /// by more than `threshold`.
     static bool is_corrupted(const Tensor14& field, float threshold = 0.3f) {
-        float expected = std::sqrt(static_cast<float>(Vec14::kDim)); // identity norm
-        float actual = field.frobenius_norm();
-        return std::abs(actual - expected) > threshold * expected;
+        float norm = field.frobenius_norm();
+        return std::abs(norm - 1.0f) > threshold;
     }
 };
 

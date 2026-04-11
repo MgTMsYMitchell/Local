@@ -1,0 +1,5 @@
+if(EXISTS "/home/runner/work/Local/Local/QuantumFractalSystem/build/qfs_tests[1]_tests.cmake")
+  include("/home/runner/work/Local/Local/QuantumFractalSystem/build/qfs_tests[1]_tests.cmake")
+else()
+  add_test(qfs_tests_NOT_BUILT qfs_tests_NOT_BUILT)
+endif()
