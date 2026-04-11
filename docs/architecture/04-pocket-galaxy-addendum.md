@@ -782,6 +782,563 @@ Why This Matters:
 
 ---
 
+## Mechanism 8 — Tube-Diameter Memory
+
+### Source
+
+Physarum polycephalum (slime mold) stores memory in the physical
+diameter of its tubes. Tubes carrying more nutrients grow thicker.
+Unused tubes atrophy and thin. The network's geometry is its memory —
+no separate memory store is needed. Flow capacity scales with the square
+of the diameter (Hagen-Poiseuille law).
+
+### Gap in Current Spec
+
+Tendrils have a `weight` field that increments and decrements linearly.
+This produces uniform scaling — a tendril at 0.8 carries only 4× the
+importance of one at 0.2. Real Physarum networks develop extreme
+contrast between highways and footpaths because of quadratic scaling.
+
+### Integration
+
+Replace the abstract weight with a physically-modeled diameter
+that governs flow capacity quadratically.
+
+```
+CURRENT MODEL (linear):
+  weight 0.2 → capacity 0.2
+  weight 0.8 → capacity 0.8
+  Ratio: 4:1
+
+PHYSARUM MODEL (quadratic):
+  diameter 0.2 → capacity π*(0.1)² = 0.031
+  diameter 0.8 → capacity π*(0.4)² = 0.503
+  Ratio: 16:1
+
+  The thick tendril carries SIXTEEN TIMES more flow.
+  This naturally creates highways vs footpaths.
+```
+
+Schema Change:
+
+```sql
+-- Rename weight → diameter (semantic upgrade, same column type)
+ALTER TABLE tendrils RENAME COLUMN weight TO diameter;
+
+-- Flow capacity is computed at query time:
+-- flow_capacity = pi * (diameter / 2)^2
+-- Or as a generated column:
+-- ALTER TABLE tendrils ADD COLUMN flow_capacity REAL
+-- GENERATED ALWAYS AS (3.14159265 * (diameter / 2.0) * (diameter / 2.0)) STORED;
+```
+
+Updated Routing Rules:
+
+```
+1. STRENGTHEN ON USE
+   traversed → diameter += 0.01
+   (slower growth than before — quadratic effect compensates)
+
+2. ATROPHY ON NEGLECT
+   unused → diameter *= 0.995 per cycle
+   (slower atrophy — thin tubes persist longer as footpaths)
+
+3. PRUNE THRESHOLD
+   diameter < 0.005 → prune  (was 0.01 for weight)
+
+4. ROUTE SELECTION
+   Choose path with maximum product(flow_capacity) along path
+   flow_capacity = π * (diameter/2)²
+
+5. HIGHWAY EMERGENCE
+   After ~100 cycles of natural traffic:
+   - 5–10 "highway" tendrils with diameter > 0.7
+   - 50–100 "roads" with diameter 0.2–0.5
+   - 200+ "footpaths" with diameter < 0.1
+   The network self-organizes into hierarchical transport
+   WITHOUT any central planner.
+```
+
+Emergent Infrastructure Tiers:
+
+| Diameter Range | Flow Capacity  | Tier Name | Function                                        |
+|----------------|----------------|-----------|-------------------------------------------------|
+| 0.8 – 1.0      | 0.50 – 0.79    | Highway   | Primary inter-cluster routes, axiom connections |
+| 0.5 – 0.8      | 0.20 – 0.50    | Road      | Regular inter-pocket routes                     |
+| 0.2 – 0.5      | 0.03 – 0.20    | Path      | Occasional associations                         |
+| 0.05 – 0.2     | 0.002 – 0.03   | Footpath  | Rarely used, may atrophy                        |
+| < 0.05         | < 0.002        | Thread    | Near-death, one cycle from pruning              |
+
+JSON Schema Update (Tendril):
+
+```json
+{
+  "diameter": {
+    "type": "number",
+    "minimum": 0.0,
+    "maximum": 1.0,
+    "description": "Tube diameter (Physarum model). Replaces weight. Flow capacity scales quadratically: π*(d/2)²"
+  },
+  "flow_capacity": {
+    "type": "number",
+    "minimum": 0.0,
+    "readOnly": true,
+    "description": "Computed: π * (diameter/2)². Do not set directly."
+  }
+}
+```
+
+---
+
+## Mechanism 9 — Anticipatory Behavior
+
+### Source
+
+When Physarum is exposed to periodic cold shocks every 60 minutes, it
+learns the rhythm and preemptively slows its growth before the
+next shock arrives — even when the shock doesn't come. A brainless,
+single-celled organism, predicting the future from temporal patterns.
+
+### Gap in Current Spec
+
+The system is entirely reactive. Queries arrive, get processed, results
+returned. There is no mechanism for detecting temporal patterns in the
+input stream and pre-activating relevant resources before the next
+expected event.
+
+### Integration
+
+Add an Anticipation Engine as a sub-stage of the consolidation
+cycle. It detects periodic patterns and pre-warms the system.
+
+```
+ANTICIPATION ENGINE
+═══════════════════
+
+Runs during: Consolidation cycle (new sub-stage between N3 and REM)
+
+STEP 1 — RHYTHM DETECTION
+  Scan query log for periodic patterns:
+  - Collect timestamps of queries grouped by domain/radical
+  - Apply autocorrelation to find dominant period T
+  - Confidence = peak autocorrelation coefficient
+  - Threshold: confidence > 0.7 to register a rhythm
+
+STEP 2 — PATTERN REGISTRATION
+  Store detected rhythms in the rhythms table (see schema below)
+
+STEP 3 — PRE-ACTIVATION
+  When current_time approaches next_predicted (within 1 period/10):
+  - Pre-warm relevant pockets (unfold enfoldment layers)
+  - Pre-activate relevant symbols (dormant → awakened)
+  - Pre-compute ILE predictions for expected query pattern
+  - Pre-expand relevant tendrils (diameter += 0.005 boost)
+
+STEP 4 — OUTCOME TRACKING
+  IF anticipated event arrives within tolerance window:
+    → hit_count++
+    → confidence recalculated
+    → Response delivered at VEL-FLASH speed (pre-computed)
+  IF anticipated event does NOT arrive:
+    → miss_count++
+    → Log as "phantom anticipation"
+    → If miss_count > hit_count → deactivate rhythm
+
+STEP 5 — PHANTOM VALUE
+  Phantom anticipations are not waste — they are data:
+  - "We expected a water-domain query every hour but it stopped"
+  - This absence IS information
+  - Generate a dream: "periodic water-query pattern has broken"
+  - The missing expected event becomes a signal
+```
+
+Schema Addition:
+
+```sql
+CREATE TABLE IF NOT EXISTS rhythms (
+    id             TEXT    PRIMARY KEY,
+    domain         TEXT,
+    radicals       TEXT,             -- JSON array of radical IDs
+    period_ms      INTEGER NOT NULL,
+    confidence     REAL    NOT NULL DEFAULT 0.0,
+    last_occurrence INTEGER,
+    next_predicted  INTEGER,
+    hit_count      INTEGER DEFAULT 0,
+    miss_count     INTEGER DEFAULT 0,
+    status         TEXT    DEFAULT 'active',
+        -- active:   currently tracking
+        -- dormant:  too many misses, paused
+        -- expired:  deactivated permanently
+    created_at     INTEGER NOT NULL
+);
+
+CREATE INDEX idx_rhythms_status ON rhythms(status);
+CREATE INDEX idx_rhythms_next   ON rhythms(next_predicted);
+```
+
+JSON Schema:
+
+```json
+{
+  "$id": "https://qrrune.local/schemas/rhythm.json",
+  "title": "Rhythm",
+  "description": "A detected periodic pattern in the query stream",
+  "type": "object",
+  "required": ["id", "period_ms", "confidence", "status", "created_at"],
+  "properties": {
+    "id":               { "type": "string", "format": "uuid" },
+    "domain":           { "type": ["string", "null"] },
+    "radicals": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^CR-[0-6][0-9]$" }
+    },
+    "period_ms":        { "type": "integer", "minimum": 1000 },
+    "confidence":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "last_occurrence":  { "type": ["integer", "null"] },
+    "next_predicted":   { "type": ["integer", "null"] },
+    "hit_count":        { "type": "integer", "minimum": 0, "default": 0 },
+    "miss_count":       { "type": "integer", "minimum": 0, "default": 0 },
+    "status": {
+      "type": "string",
+      "enum": ["active", "dormant", "expired"]
+    },
+    "created_at": { "type": "integer" }
+  }
+}
+```
+
+Query Performance Impact:
+
+```
+WITHOUT ANTICIPATION:
+  Query arrives → cold decode → 80ms response
+
+WITH ANTICIPATION (rhythm detected, pre-warmed):
+  Query arrives → prediction cache hit → 5ms response
+  16x speedup for predictable periodic queries
+
+WITH ANTICIPATION (phantom — query doesn't arrive):
+  Pre-warmed resources idle → auto-release after timeout
+  Cost:    ~2ms wasted CPU + small memory allocation
+  Benefit: generated dream about broken pattern (information gain)
+```
+
+---
+
+## Mechanism 10 — Habituation
+
+### Source
+
+Physarum exhibits habituation — repeated exposure to a harmless stimulus
+causes the organism to stop responding to it. It is not forgetting —
+it is learning to ignore. After a rest period without the stimulus, the
+response returns (dishabituation). This is the simplest form of learning
+in biology.
+
+### Gap in Current Spec
+
+Decay exists but is purely time-based. A symbol queried 10,000 times
+never fades into background. High-frequency symbols dominate attention
+permanently. There is no mechanism for "I have seen this too many times,
+deprioritize it."
+
+### Integration
+
+Add a habituation system that mutes over-accessed symbols without
+deleting them.
+
+```
+HABITUATION LIFECYCLE
+═════════════════════
+
+                    access_count
+                    │
+  0────────────────►threshold──────────────────►
+  │                 │                           │
+  │  NOVEL          │  HABITUATING              │  HABITUATED
+  │  Full response  │  Diminishing response     │  Muted
+  │  High activation│  Activation declining     │  activation = 0.1
+  │  Full AEL       │  AEL.novelty fading       │  AEL.novelty = 0.0
+  │                 │                           │
+  │                 │                           │  (rest period
+  │                 │                           │  with no access)
+  │                 │                           │
+  │  DISHABITUATED ◄┼───────────────────────────┘
+  │  Novelty spike! │  reset habituation_count
+  │  "Wait, this    │  full activation restored
+  │  is fresh       │
+  │  again?"        │
+  └─────────────────┘
+
+  ALSO: content change while habituated → INSTANT dishabituation
+```
+
+Schema Addition:
+
+```sql
+ALTER TABLE symbols ADD COLUMN habituation_count     INTEGER DEFAULT 0;
+ALTER TABLE symbols ADD COLUMN habituation_threshold INTEGER DEFAULT 50;
+ALTER TABLE symbols ADD COLUMN habituated_at         INTEGER;
+```
+
+Rules:
+
+```
+RULE 1 — ACCUMULATION
+  Each query returning this symbol: habituation_count++
+
+RULE 2 — TRIGGER
+  When habituation_count > habituation_threshold:
+    activation      = 0.1  (muted, not zero)
+    ael.novelty     = 0.0
+    habituated_at   = now()
+    Symbol STILL returned in queries but ranked lower
+    Symbol STILL participates in tendril routing
+
+RULE 3 — DISHABITUATION (time-based)
+  If NOT queried for (habituation_threshold * 2) ticks:
+    habituation_count = 0
+    habituated_at     = null
+    Novelty restored — next access gets full activation spike
+
+RULE 4 — DISHABITUATION (change-based)
+  If symbol's content CHANGES while habituated:
+    Immediate dishabituation
+    Novelty spike: ael.novelty = 0.95
+    activation = 0.9
+    "Wait — this familiar thing is different now"
+
+RULE 5 — THRESHOLD ADAPTATION
+  Symbols that habituate and dishabituate repeatedly:
+    habituation_threshold increases by 10 each cycle
+    System learns "this one takes longer to tune out"
+    Prevents pathological habituation/dishabituation loops
+```
+
+Query Ranking Impact:
+
+```
+QUERY: "What is the cache?"
+
+WITHOUT HABITUATION:
+  1. [TRUSTED] cache-definition         (accessed 10,000 times) ← always #1
+  2. [TRUSTED] cache-staleness-pattern  (accessed 50 times)
+  3. [THEORY]  cache-network-correlation (accessed 3 times)
+
+WITH HABITUATION:
+  1. [TRUSTED] cache-staleness-pattern  (50 accesses,     novelty 0.6)
+  2. [THEORY]  cache-network-correlation (3 accesses,      novelty 0.9)
+  3. [TRUSTED] cache-definition         (10,000 accesses, HABITUATED, novelty 0.0)
+     ↑ Still returned, but ranked last.
+       The system knows you already know what a cache is.
+       Novel and developing knowledge surfaces first.
+```
+
+JSON Schema Addition:
+
+```json
+{
+  "habituation_count": {
+    "type": "integer", "minimum": 0, "default": 0,
+    "description": "Physarum habituation counter. Increments per query access."
+  },
+  "habituation_threshold": {
+    "type": "integer", "minimum": 10, "default": 50,
+    "description": "Access count at which symbol becomes habituated (muted)."
+  },
+  "habituated_at": {
+    "type": ["integer", "null"],
+    "description": "Timestamp when habituation triggered. null = not habituated."
+  }
+}
+```
+
+---
+
+## Mechanism 11 — Typogenetics / Self-Modifying Glyphs
+
+### Source
+
+In *Gödel, Escher, Bach*, Hofstadter describes "typogenetics" — a system
+where strands of genetic-like code contain instructions that, when
+executed, modify the strand itself. The code is both the program and
+the data. Executing the strand changes what the strand says, which
+changes what it does when executed next time. Self-modification as a
+fundamental computational primitive.
+
+### Gap in Current Spec
+
+Glyphs are static after encoding. Their metadata changes (trust,
+activation, decay) but their radical composition — the actual semantic
+content — is fixed at creation time. A glyph cannot evolve its own
+meaning through use.
+
+### Integration
+
+Introduce self-modifying glyphs: glyphs carrying embedded
+transformation instructions. When interpreted by the ILE enough times
+or when certain conditions are met, the glyph rewrites its own
+radicals according to its embedded program.
+
+Typogenetic Program Schema:
+
+```json
+{
+  "typogenetic_program": {
+    "type": ["object", "null"],
+    "description": "Self-modification rules embedded in the glyph",
+    "properties": {
+      "enabled": { "type": "boolean", "default": false },
+      "rules": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["condition", "action"],
+          "properties": {
+            "condition": {
+              "type": "object",
+              "properties": {
+                "trigger": {
+                  "type": "string",
+                  "enum": [
+                    "access_count", "trust_score", "decay_score",
+                    "habituation_count", "connectivity", "age_ticks"
+                  ]
+                },
+                "operator": {
+                  "type": "string",
+                  "enum": [">=", "<=", "==", "!=", ">", "<"]
+                },
+                "value": { "type": "number" }
+              }
+            },
+            "action": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "mutate_radical", "add_radical",
+                    "remove_radical", "swap_positions"
+                  ]
+                },
+                "target_position": {
+                  "type": "string",
+                  "enum": ["A", "B", "C", "D"]
+                },
+                "from_radical": {
+                  "type": ["string", "null"],
+                  "pattern": "^CR-[0-6][0-9]$"
+                },
+                "to_radical": {
+                  "type": ["string", "null"],
+                  "pattern": "^CR-[0-6][0-9]$"
+                },
+                "mutation_type": {
+                  "type": ["string", "null"],
+                  "enum": [
+                    "i-mutation", "u-mutation",
+                    "a-mutation", "ö-mutation", null
+                  ]
+                },
+                "merge_mode": {
+                  "type": ["string", "null"],
+                  "enum": ["replace", "bind_rune", null]
+                }
+              }
+            },
+            "description": { "type": "string" }
+          }
+        }
+      },
+      "mutation_log": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "timestamp":  { "type": "integer" },
+            "rule_index": { "type": "integer" },
+            "before":     { "type": "string" },
+            "after":      { "type": "string" },
+            "reason":     { "type": "string" }
+          }
+        }
+      },
+      "generation": {
+        "type": "integer", "minimum": 0, "maximum": 5, "default": 0
+      }
+    }
+  }
+}
+```
+
+Example — A Glyph That Learns:
+
+```
+INITIAL GLYPH: "server memory leak"
+  A=CR-54(Error)  B=CR-16(Tower)  C=CR-32(Remember)  D=CR-08(Water)
+
+TYPOGENETIC RULE 1:
+  condition: access_count >= 100
+  action:    mutate_radical D  from CR-08(Water) to CR-22(Spiral)
+             via i-mutation
+  meaning:   After 100 accesses, the system learns this is not a
+             one-time leak — it is a recurring cycle.
+             "Water(leak)" becomes "Spiral(cycle)"
+
+TYPOGENETIC RULE 2:
+  condition: trust_score >= 0.9
+  action:    add_radical CR-57(Truth) to position D via bind_rune
+  meaning:   When trust reaches 0.9, the glyph asserts itself as
+             verified fact by fusing Truth into its structure.
+
+AFTER 100 ACCESSES:
+  A=CR-54(Error)  B=CR-16(Tower)  C=CR-32(Remember)  D=CR-22(Spiral)
+  The glyph now reads: "recurring memory error in server"
+  It LEARNED from its own usage pattern.
+
+AFTER TRUST 0.9:
+  D=CR-22(Spiral) bind-fused with CR-57(Truth)
+  The glyph now reads: "verified recurring memory error in server"
+  It ASSERTED its own reliability.
+```
+
+Safety Constraints:
+
+```
+CONSTRAINT 1: DETERMINATIVE IMMUTABILITY
+  Position A (determinative radical) can NEVER be modified by
+  typogenetic rules. The domain classification is permanent.
+  A fire glyph cannot self-modify into a water glyph.
+
+CONSTRAINT 2: TRUST GATE
+  Self-modification only fires for trust_state >= 'theory'.
+  Dreams cannot self-modify — insufficient confidence.
+
+CONSTRAINT 3: LINEAGE PRESERVATION
+  Every mutation is logged in mutation_log AND lineage.
+  The glyph's full history is always recoverable.
+
+CONSTRAINT 4: GENERATION LIMIT
+  Maximum 5 generations of self-modification per glyph.
+  After generation 5, the glyph is "mature" — no more auto-mutation.
+  Manual modification by operator is still possible.
+
+CONSTRAINT 5: REVERSIBILITY
+  Every mutation can be reversed by consulting mutation_log
+  and restoring the previous radical. Non-destructive evolution.
+```
+
+Why This Matters:
+
+Without typogenetics, the system needs an external agent to notice
+that "this leak keeps happening" and manually update the glyph. WITH
+typogenetics, the glyph itself notices the pattern and self-corrects.
+The knowledge substrate becomes genuinely adaptive — not just stored
+data, but data that learns from being used.
+
+---
+
 ## Related documents
 
 - [03 — RQ^R2 Encoder Module](03-rqr2-module.md)
