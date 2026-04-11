@@ -18,7 +18,7 @@ using json = nlohmann::json;
 
 namespace wallet {
 
-// ── internal helpers ──────────────────────────────────────────────────────────
+// ── internal helpers ────────────────────────────────────────────────────────
 
 static std::array<uint8_t, 32> random_seed()
 {
@@ -34,13 +34,20 @@ static std::array<uint8_t, 32> random_seed()
     return seed;
 }
 
-// ── public API ────────────────────────────────────────────────────────────────
+// ── public API ─────────────────────────────────────────────────────────────
 
 Keypair generate()
 {
     Keypair kp;
     auto seed = random_seed();
-    crypto_ed25519_key_pair(kp.secret_key.data(), kp.public_key.data(), seed.data());
+
+    // Monocypher-Ed25519 expects:
+    // - 32-byte "secret key" seed
+    // - 32-byte public key derived from it
+    // Store seed into the first 32 bytes of secret_key (the rest can remain zero)
+    std::copy(seed.begin(), seed.end(), kp.secret_key.begin());
+    crypto_ed25519_public_key(kp.public_key.data(), kp.secret_key.data());
+
     crypto_wipe(seed.data(), seed.size());
     return kp;
 }
@@ -48,8 +55,13 @@ Keypair generate()
 std::array<uint8_t, 64> sign(const Keypair& kp, std::span<const uint8_t> message)
 {
     std::array<uint8_t, 64> sig{};
-    crypto_ed25519_sign(sig.data(), kp.secret_key.data(),
-                        message.data(), message.size());
+
+    // Signature API: (signature, secret_key, public_key, message, message_len)
+    crypto_ed25519_sign(sig.data(),
+                        kp.secret_key.data(),
+                        kp.public_key.data(),
+                        message.data(),
+                        message.size());
     return sig;
 }
 
